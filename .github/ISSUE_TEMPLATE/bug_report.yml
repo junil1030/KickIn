@@ -1,0 +1,38 @@
+name: 🐞Bug Report
+description: 버그 리포트
+title: "[Bug]: "
+labels: ["bug"]
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 무엇이 문제인가요?
+      placeholder: 발생한 문제를 설명해주세요
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 방법
+      placeholder: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 환경
+      placeholder: 예) iOS 17.1, iPhone 15 Pro
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 추가 정보
+      placeholder: 스크린샷, 로그 등
