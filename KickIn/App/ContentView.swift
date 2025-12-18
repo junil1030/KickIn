@@ -21,8 +21,8 @@ struct ContentView: View {
                 ProgressView()
                     .scaleEffect(1.5)
             } else if isAuthenticated {
-                // 로그인 됨 → HomeView
-                HomeView()
+                // 로그인 됨 → MainTabView
+                MainTabView()
             } else {
                 // 로그인 안됨 → LoginView
                 LoginView(onLoginSuccess: {
