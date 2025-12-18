@@ -7,6 +7,7 @@
 
 import Foundation
 import Alamofire
+import OSLog
 
 final class NetworkService: NetworkServiceProtocol {
     private let session: Session
@@ -29,18 +30,48 @@ final class NetworkService: NetworkServiceProtocol {
     // MARK: - NetworkServiceProtocol
 
     func request<T: Decodable>(_ router: any APIRouter) async throws -> T {
+        Logger.network.debug("Request started: \(String(describing: router))")
+
         return try await withCheckedThrowingContinuation { continuation in
-            session.request(router)
-                .validate()
-                .responseDecodable(of: T.self) { response in
-                    switch response.result {
-                    case .success(let value):
-                        continuation.resume(returning: value)
-                    case .failure(let error):
-                        let networkError = self.mapError(error, data: response.data, statusCode: response.response?.statusCode)
-                        continuation.resume(throwing: networkError)
-                    }
+            do {
+#if DEBUG
+                let urlRequest = try router.asURLRequest()
+                Logger.network.debug("URL: \(urlRequest.url?.absoluteString ?? "nil")")
+                Logger.network.debug("Method: \(urlRequest.method?.rawValue ?? "nil")")
+                Logger.network.debug("Headers: \(urlRequest.headers.dictionary)")
+
+                if let body = urlRequest.httpBody, let bodyString = String(data: body, encoding: .utf8) {
+                    Logger.network.debug("Body: \(bodyString)")
                 }
+#endif
+
+                session.request(router)
+                    .validate()
+                    .responseDecodable(of: T.self) { response in
+                        Logger.network.debug("Response received")
+                        Logger.network.debug("Status Code: \(response.response?.statusCode ?? 0)")
+
+#if DEBUG
+                        if let data = response.data, let dataString = String(data: data, encoding: .utf8) {
+                            Logger.network.debug("Response Data: \(dataString)")
+                        }
+#endif
+
+                        switch response.result {
+                        case .success(let value):
+                            Logger.network.info("Request succeeded")
+                            continuation.resume(returning: value)
+                        case .failure(let error):
+                            Logger.network.error("Request failed: \(error.localizedDescription)")
+                            let networkError = self.mapError(error, data: response.data, statusCode: response.response?.statusCode)
+                            Logger.network.error("Mapped error: \(networkError.localizedDescription)")
+                            continuation.resume(throwing: networkError)
+                        }
+                    }
+            } catch {
+                Logger.network.error("Failed to create URLRequest: \(error.localizedDescription)")
+                continuation.resume(throwing: NetworkError.invalidURL)
+            }
         }
     }
 
