@@ -22,7 +22,7 @@ extension APIHeader {
             return HTTPHeader(name: "SeSACKey", value: APIConfig.apikey)
 
         case .applicationJSON:
-            return HTTPHeader(name: "Content-Type", value: "applicationJSON")
+            return HTTPHeader(name: "Content-Type", value: "application/json")
 
         case .refreshToken(let token):
             return HTTPHeader(name: "RefreshToken", value: token)
