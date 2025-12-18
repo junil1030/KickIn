@@ -9,6 +9,11 @@ import SwiftUI
 
 struct LoginView: View {
     @StateObject private var viewModel = LoginViewModel()
+    var onLoginSuccess: (() -> Void)?
+
+    init(onLoginSuccess: (() -> Void)? = nil) {
+        self.onLoginSuccess = onLoginSuccess
+    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -53,6 +58,9 @@ struct LoginView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.black.opacity(0.2))
             }
+        }
+        .onAppear {
+            viewModel.onLoginSuccess = onLoginSuccess
         }
     }
 }
