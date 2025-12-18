@@ -23,7 +23,7 @@ struct LoginView: View {
             Button(action: {
                 viewModel.handleKakaoLogin()
             }) {
-                Image("kakao_login_image")
+                Image("Login/kakao_login_image")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 50)
@@ -34,7 +34,7 @@ struct LoginView: View {
             Button(action: {
                 viewModel.handleAppleLogin()
             }) {
-                Image("apple_login_image")
+                Image("Login/apple_login_image")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 50)
