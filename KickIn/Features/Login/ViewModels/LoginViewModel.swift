@@ -18,59 +18,11 @@ import UIKit
 final class LoginViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var isLoggedIn = false
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
 
-    init() {
-        checkAutoLogin()
-    }
-
-    // MARK: - Auto Login
-
-    private func checkAutoLogin() {
-        Task {
-            await performAutoLogin()
-        }
-    }
-
-    private func performAutoLogin() async {
-        guard let refreshToken = await tokenStorage.getRefreshToken() else {
-            // refreshToken이 없으면 로그인 화면 유지
-            return
-        }
-
-        await MainActor.run {
-            isLoading = true
-        }
-
-        do {
-            // refreshToken으로 자동 로그인 시도
-            let response: RefreshTokenResponseDTO = try await networkService.request(
-                UserRouter.refreshToken(token: refreshToken)
-            )
-
-            // 새 토큰 저장
-            if let accessToken = response.accessToken,
-               let newRefreshToken = response.refreshToken {
-                await tokenStorage.setAccessToken(accessToken)
-                await tokenStorage.setRefreshToken(newRefreshToken)
-
-                await MainActor.run {
-                    isLoggedIn = true
-                    isLoading = false
-                }
-            }
-        } catch {
-            // 자동 로그인 실패 - 기존 토큰 삭제하고 로그인 화면 유지
-            await tokenStorage.clearTokens()
-
-            await MainActor.run {
-                isLoading = false
-            }
-        }
-    }
+    var onLoginSuccess: (() -> Void)?
 
     // MARK: - Apple Sign In
 
@@ -183,15 +135,15 @@ final class LoginViewModel: ObservableObject {
             // 토큰 저장
             if let accessToken = response.accessToken,
                let refreshToken = response.refreshToken {
-                await tokenStorage.setAccessToken(accessToken)
-                await tokenStorage.setRefreshToken(refreshToken)
-
                 Logger.auth.info("Server AccessToken: \(accessToken)")
                 Logger.auth.info("Server RefreshToken: \(refreshToken)")
 
+                await tokenStorage.setAccessToken(accessToken)
+                await tokenStorage.setRefreshToken(refreshToken)
+
                 await MainActor.run {
-                    isLoggedIn = true
                     isLoading = false
+                    onLoginSuccess?()
                 }
             }
         } catch let error as NetworkError {
