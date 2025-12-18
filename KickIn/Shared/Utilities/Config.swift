@@ -6,3 +6,14 @@
 //
 
 import Foundation
+
+enum Config {
+    private static let info = Bundle.main.infoDictionary
+    
+    static let kakaoNativeAppKey: String = {
+        guard let appkey = info?["kakao_native_app_key"] as? String else {
+            fatalError("required api_key")
+        }
+        return appkey
+    }()
+}
