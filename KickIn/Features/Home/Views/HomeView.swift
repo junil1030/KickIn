@@ -9,10 +9,13 @@ import SwiftUI
 
 struct HomeView: View {
     var body: some View {
-        Text("Success Login")
+        Text("Home View")
+            .navigationTitle("홈")
     }
 }
 
 #Preview {
-    HomeView()
+    NavigationStack {
+        HomeView()
+    }
 }
