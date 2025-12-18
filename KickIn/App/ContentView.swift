@@ -68,7 +68,7 @@ struct ContentView: View {
                 isAuthenticated = true
             }
         } catch {
-            Logger.auth.error("🔐 Auto login failed: \(error.localizedDescription)")
+            Logger.auth.error("Auto login failed: \(error.localizedDescription)")
             await tokenStorage.clearTokens()
         }
 
