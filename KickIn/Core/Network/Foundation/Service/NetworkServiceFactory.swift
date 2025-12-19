@@ -35,7 +35,7 @@ final class NetworkServiceFactory {
         self.interceptor = AuthenticationInterceptor(tokenStorage: tokenStorage)
 
         // Session 설정
-        var config = sessionConfiguration
+        let config = sessionConfiguration
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 30
         config.requestCachePolicy = .reloadRevalidatingCacheData
