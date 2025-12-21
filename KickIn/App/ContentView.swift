@@ -64,6 +64,11 @@ struct ContentView: View {
                let newRefreshToken = refreshResponse.refreshToken {
                 await tokenStorage.setAccessToken(accessToken)
                 await tokenStorage.setRefreshToken(newRefreshToken)
+                
+#if DEBUG
+                Logger.auth.info("Access Token: \(accessToken)")
+                Logger.auth.info("Refresh Token: \(refreshToken)")
+#endif
 
                 isAuthenticated = true
             }
