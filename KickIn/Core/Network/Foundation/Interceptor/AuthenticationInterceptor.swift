@@ -28,7 +28,7 @@ final class AuthenticationInterceptor: RequestInterceptor {
 
             // Get access token from storage
             if let accessToken = await tokenStorage.getAccessToken() {
-                urlRequest.headers.add(.authorization(bearerToken: accessToken))
+                urlRequest.headers.add(.authorization(accessToken))
             }
 
             completion(.success(urlRequest))
