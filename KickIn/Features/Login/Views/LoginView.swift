@@ -44,7 +44,7 @@ struct LoginView: View {
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
-                    .font(.caption)
+                    .font(.caption1())
                     .padding(.horizontal, 40)
                     .padding(.top, 8)
             }
@@ -62,6 +62,7 @@ struct LoginView: View {
         .onAppear {
             viewModel.onLoginSuccess = onLoginSuccess
         }
+        .defaultBackground()
     }
 }
 

@@ -135,12 +135,14 @@ final class LoginViewModel: ObservableObject {
             // 토큰 저장
             if let accessToken = response.accessToken,
                let refreshToken = response.refreshToken {
-                Logger.auth.info("Server AccessToken: \(accessToken)")
-                Logger.auth.info("Server RefreshToken: \(refreshToken)")
 
                 await tokenStorage.setAccessToken(accessToken)
                 await tokenStorage.setRefreshToken(refreshToken)
-
+#if DEBUG
+                Logger.auth.info("Access Token: \(accessToken)")
+                Logger.auth.info("Refresh Token: \(refreshToken)")
+#endif
+                
                 await MainActor.run {
                     isLoading = false
                     onLoginSuccess?()

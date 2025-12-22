@@ -16,8 +16,20 @@ struct MainTabView: View {
         case profile
     }
 
+    init() {
+        UITabBar.appearance().unselectedItemTintColor = UIColor(Color.gray45)
+    }
+
     var body: some View {
-        TabView(selection: $selectedTab) {
+        GeometryReader { geometry in
+            let screenSize = ScreenSize(
+                width: geometry.size.width,
+                height: geometry.size.height,
+                safeAreaTop: geometry.safeAreaInsets.top,
+                safeAreaBottom: geometry.safeAreaInsets.bottom
+            )
+
+            TabView(selection: $selectedTab) {
             NavigationStack {
                 HomeView()
             }
@@ -56,8 +68,10 @@ struct MainTabView: View {
                 }
             }
             .tag(Tab.profile)
+            }
+            .tint(Color.gray90)
+            .environment(\.screenSize, screenSize)
         }
-        .tint(.red)
     }
 }
 

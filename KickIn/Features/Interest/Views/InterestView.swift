@@ -9,7 +9,9 @@ import SwiftUI
 
 struct InterestView: View {
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        Text("Interest View")
+            .navigationTitle("관심매물")
+            .defaultBackground()
     }
 }
 
