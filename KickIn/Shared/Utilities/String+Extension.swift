@@ -6,3 +6,10 @@
 //
 
 import Foundation
+
+extension String {
+    var thumbnailURL: URL? {
+        let urlString = APIConfig.baseURL + self
+        return URL(string: urlString)
+    }
+}
