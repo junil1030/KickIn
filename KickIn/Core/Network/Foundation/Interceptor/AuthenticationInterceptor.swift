@@ -28,7 +28,7 @@ final class AuthenticationInterceptor: RequestInterceptor {
 
             // Get access token from storage
             if let accessToken = await tokenStorage.getAccessToken() {
-                urlRequest.headers.add(.authorization(bearerToken: accessToken))
+                urlRequest.headers.add(.authorization(accessToken))
             }
 
             completion(.success(urlRequest))
@@ -90,7 +90,7 @@ final class AuthenticationInterceptor: RequestInterceptor {
         // Create refresh token request
         let router = UserRouter.refreshToken(token: refreshToken)
 
-        guard let urlRequest = try? router.asURLRequest() else {
+        guard let urlRequest = try? await router.asURLRequest() else {
             throw NetworkError.invalidURL
         }
 

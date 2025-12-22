@@ -23,7 +23,7 @@ struct LoginView: View {
             Button(action: {
                 viewModel.handleKakaoLogin()
             }) {
-                Image("kakao_login_image")
+                Image("Login/kakao_login_image")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 50)
@@ -34,7 +34,7 @@ struct LoginView: View {
             Button(action: {
                 viewModel.handleAppleLogin()
             }) {
-                Image("apple_login_image")
+                Image("Login/apple_login_image")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 50)
@@ -44,7 +44,7 @@ struct LoginView: View {
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
-                    .font(.caption)
+                    .font(.caption1())
                     .padding(.horizontal, 40)
                     .padding(.top, 8)
             }
@@ -62,6 +62,7 @@ struct LoginView: View {
         .onAppear {
             viewModel.onLoginSuccess = onLoginSuccess
         }
+        .defaultBackground()
     }
 }
 

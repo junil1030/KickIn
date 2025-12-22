@@ -40,7 +40,7 @@ enum LogRouter: APIRouter {
     }
     
     func asURLRequest() throws -> URLRequest {
-        var components = URLComponents(string: self.baseURL.appendingPathComponent(self.path).absoluteString)!
+        let components = URLComponents(string: self.baseURL.appendingPathComponent(self.path).absoluteString)!
         
         guard let url = components.url else {
             throw URLError(.badURL)

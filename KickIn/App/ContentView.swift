@@ -21,8 +21,8 @@ struct ContentView: View {
                 ProgressView()
                     .scaleEffect(1.5)
             } else if isAuthenticated {
-                // 로그인 됨 → HomeView
-                HomeView()
+                // 로그인 됨 → MainTabView
+                MainTabView()
             } else {
                 // 로그인 안됨 → LoginView
                 LoginView(onLoginSuccess: {
@@ -64,11 +64,16 @@ struct ContentView: View {
                let newRefreshToken = refreshResponse.refreshToken {
                 await tokenStorage.setAccessToken(accessToken)
                 await tokenStorage.setRefreshToken(newRefreshToken)
+                
+#if DEBUG
+                Logger.auth.info("Access Token: \(accessToken)")
+                Logger.auth.info("Refresh Token: \(refreshToken)")
+#endif
 
                 isAuthenticated = true
             }
         } catch {
-            Logger.auth.error("🔐 Auto login failed: \(error.localizedDescription)")
+            Logger.auth.error("Auto login failed: \(error.localizedDescription)")
             await tokenStorage.clearTokens()
         }
 

@@ -8,11 +8,51 @@
 import SwiftUI
 
 struct HomeView: View {
+    @Environment(\.screenSize) private var screenSize
+    @StateObject private var viewModel = HomeViewModel()
+    @State private var accessToken: String?
+
     var body: some View {
-        Text("Success Login")
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                // 상단 이미지 컴포넌트 (3:2 비율)
+                TodayEstatesTopImageView(
+                    estates: viewModel.todayEstates,
+                    accessToken: accessToken
+                )
+
+                // 아이콘 버튼 그룹
+                CategoryButtonRow()
+
+                // 최근 검색 매물 섹션
+                RecentEstateSection()
+
+                // HOT 매물 섹션
+                HotEstateSection(
+                    estates: viewModel.hotEstates,
+                    accessToken: accessToken
+                )
+                
+                // 오늘의 Topic
+                TopicSection(topics: viewModel.todayTopics)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .ignoresSafeArea(edges: .top)
+        .navigationBarHidden(true)
+        .defaultBackground()
+        .task {
+            // Load access token
+            accessToken = await viewModel.getAccessToken()
+            // Load today estates
+            await viewModel.loadData()
+        }
     }
 }
 
 #Preview {
-    HomeView()
+    NavigationStack {
+        HomeView()
+            .environment(\.screenSize, ScreenSize(width: 390, height: 844, safeAreaTop: 47, safeAreaBottom: 34))
+    }
 }
