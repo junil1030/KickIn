@@ -37,12 +37,7 @@ struct HotEstateSection: View {
                         ForEach(estates.indices, id: \.self) { index in
                             let estate = estates[index]
                             HotEstateCell(
-                                thumbnailURL: getThumbnailURL(from: estate.thumbnails?.first),
-                                introduction: estate.introduction ?? "소개가 없습니다.",
-                                price: formatPrice(deposit: estate.deposit, monthlyRent: estate.monthlyRent),
-                                viewerCount: estate.likeCount ?? 0,
-                                dong: "서울 반포동",
-                                area: formatArea(estate.area),
+                                data: estate,
                                 imageHeaders: imageHeaders
                             )
                         }
@@ -62,36 +57,6 @@ struct HotEstateSection: View {
             .foregroundStyle(Color.gray60)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
-    }
-
-    // MARK: - Private Methods
-
-    private func getThumbnailURL(from thumbnail: String?) -> URL? {
-        guard let thumbnail = thumbnail else { return nil }
-        let urlString = APIConfig.baseURL + thumbnail
-        return URL(string: urlString)
-    }
-
-    private func formatPrice(deposit: Int?, monthlyRent: Int?) -> String {
-        guard let deposit = deposit else { return "가격 정보 없음" }
-
-        if let monthlyRent = monthlyRent, monthlyRent > 0 {
-            // 월세
-            let depositInMan = deposit / 10000
-            let monthlyRentInMan = monthlyRent / 10000
-            return "월세 \(depositInMan)/\(monthlyRentInMan)"
-        } else {
-            // 전세
-            let depositInMan = deposit / 10000
-            return "전세 \(depositInMan)만원"
-        }
-    }
-
-    private func formatArea(_ area: Double?) -> String {
-        guard let area = area else { return "면적 정보 없음" }
-        // Convert square meters to pyeong (1 pyeong = 3.3058 m²)
-        let pyeong = Int(area / 3.3058)
-        return "\(pyeong)평"
     }
 }
 

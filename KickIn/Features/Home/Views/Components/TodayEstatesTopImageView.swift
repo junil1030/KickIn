@@ -10,9 +10,12 @@ import CachingKit
 
 struct TodayEstatesTopImageView: View {
     @Environment(\.screenSize) private var screenSize
+    @State private var locationText: String = ""
 
     let estates: [TodayEstateUIModel]
     let accessToken: String?
+
+    private let geocodeService = GeocodeService()
 
     private var imageWidth: CGFloat {
         screenSize.width
@@ -83,7 +86,7 @@ private extension TodayEstatesTopImageView {
 
     func imageOverlayView(_ estate: TodayEstateUIModel) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            locationCapsuleView()
+            locationCapsuleView(latitude: estate.latitude, longitude: estate.longitude)
             titleView(estate.title ?? "제목이 없습니다.")
             introductionView(estate.introduction ?? "소개가 없습니다.")
         }
@@ -95,13 +98,13 @@ private extension TodayEstatesTopImageView {
 // MARK: - Overlay Components
 private extension TodayEstatesTopImageView {
 
-    func locationCapsuleView() -> some View {
+    func locationCapsuleView(latitude: Double?, longitude: Double?) -> some View {
         HStack(spacing: 4) {
             Image("Icon/Location")
                 .resizable()
                 .frame(width: 10, height: 10)
 
-            Text("서울 반포동")
+            Text(locationText)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -111,6 +114,9 @@ private extension TodayEstatesTopImageView {
         )
         .foregroundStyle(Color.gray15)
         .font(.caption2())
+        .task {
+            locationText = await geocodeService.getLocationString(latitude: latitude, longitude: longitude)
+        }
     }
 
     func titleView(_ title: String) -> some View {
