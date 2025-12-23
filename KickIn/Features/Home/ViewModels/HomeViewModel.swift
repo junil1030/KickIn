@@ -17,19 +17,13 @@ final class HomeViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
-    private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
 
     // MARK: - Public Methods
-    
+
     func loadData() async {
         await loadTodayEstates()
         await loadHotEstates()
         await loadTopic()
-    }
-
-    /// Get access token for image headers
-    func getAccessToken() async -> String? {
-        return await tokenStorage.getAccessToken()
     }
 }
 
