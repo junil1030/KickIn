@@ -12,8 +12,8 @@ struct HotEstateCell: View {
     @State private var locationText: String = "동 정보가 없습니다."
 
     let data: HotEstateUIModel
-    let imageHeaders: [String: String]
-    
+    let cachingKit: CachingKit
+
     private let geocodeService = GeocodeService()
 
     var body: some View {
@@ -22,7 +22,7 @@ struct HotEstateCell: View {
             CachedAsyncImage(
                 url: getThumbnailURL(from: data.thumbnails?.first),
                 targetSize: CGSize(width: 300, height: 100),
-                headers: imageHeaders
+                cachingKit: cachingKit
             ) { image in
                 image
                     .resizable()

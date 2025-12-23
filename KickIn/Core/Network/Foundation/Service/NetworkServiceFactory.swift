@@ -7,6 +7,7 @@
 
 import Foundation
 import Alamofire
+import CachingKit
 
 final class NetworkServiceFactory {
     static let shared = NetworkServiceFactory()
@@ -14,6 +15,7 @@ final class NetworkServiceFactory {
     private let tokenStorage: any TokenStorageProtocol
     private let interceptor: AuthenticationInterceptor
     private let session: Session
+    private let cachingKit: CachingKit
     private lazy var networkService: NetworkServiceProtocol = {
         NetworkService(tokenStorage: tokenStorage)
     }()
@@ -53,6 +55,13 @@ final class NetworkServiceFactory {
             configuration: config,
             interceptor: interceptor
         )
+
+        // CachingKit 설정 (AuthHeaderProvider 사용)
+        let authHeaderProvider = AuthHeaderProvider(tokenStorage: tokenStorage)
+        let cacheConfiguration = CacheConfiguration(
+            headerProvider: authHeaderProvider
+        )
+        self.cachingKit = CachingKit(configuration: cacheConfiguration)
     }
 
     // MARK: - Public Methods
@@ -67,5 +76,9 @@ final class NetworkServiceFactory {
 
     func getInterceptor() -> AuthenticationInterceptor {
         interceptor
+    }
+
+    func getCachingKit() -> CachingKit {
+        cachingKit
     }
 }

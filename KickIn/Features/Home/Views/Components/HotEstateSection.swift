@@ -8,18 +8,9 @@
 import SwiftUI
 
 struct HotEstateSection: View {
+    @Environment(\.cachingKit) private var cachingKit
 
     let estates: [HotEstateUIModel]
-    let accessToken: String?
-
-    private var imageHeaders: [String: String] {
-        var headers: [String: String] = [:]
-        headers["SeSACKey"] = APIConfig.apikey
-        if let token = accessToken {
-            headers["Authorization"] = token
-        }
-        return headers
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -38,7 +29,7 @@ struct HotEstateSection: View {
                             let estate = estates[index]
                             HotEstateCell(
                                 data: estate,
-                                imageHeaders: imageHeaders
+                                cachingKit: cachingKit
                             )
                         }
                     }
@@ -62,8 +53,7 @@ struct HotEstateSection: View {
 
 #Preview {
     HotEstateSection(
-        estates: [],
-        accessToken: nil
+        estates: []
     )
     .defaultBackground()
 }
