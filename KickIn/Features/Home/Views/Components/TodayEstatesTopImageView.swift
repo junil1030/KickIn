@@ -10,10 +10,10 @@ import CachingKit
 
 struct TodayEstatesTopImageView: View {
     @Environment(\.screenSize) private var screenSize
+    @Environment(\.cachingKit) private var cachingKit
     @State private var locationText: String = ""
 
     let estates: [TodayEstateUIModel]
-    let accessToken: String?
 
     private let geocodeService = GeocodeService()
 
@@ -23,15 +23,6 @@ struct TodayEstatesTopImageView: View {
 
     private var imageHeight: CGFloat {
         imageWidth * (2.0 / 3.0)
-    }
-
-    private var imageHeaders: [String: String] {
-        var headers: [String: String] = [:]
-        headers["SeSACKey"] = APIConfig.apikey
-        if let token = accessToken {
-            headers["Authorization"] = token
-        }
-        return headers
     }
 
     var body: some View {
@@ -65,7 +56,7 @@ private extension TodayEstatesTopImageView {
         return CachedAsyncImage(
             url: imageURL,
             targetSize: CGSize(width: imageWidth, height: imageHeight),
-            headers: imageHeaders
+            cachingKit: cachingKit
         ) { image in
             ZStack(alignment: .bottomLeading) {
                 imageContent(image)
@@ -154,8 +145,7 @@ private extension TodayEstatesTopImageView {
 
 #Preview {
     TodayEstatesTopImageView(
-        estates: [],
-        accessToken: nil
+        estates: []
     )
     .environment(\.screenSize, ScreenSize(width: 390, height: 844, safeAreaTop: 47, safeAreaBottom: 34))
 }
