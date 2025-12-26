@@ -27,10 +27,20 @@ struct HotEstateSection: View {
                     HStack(spacing: 12) {
                         ForEach(estates.indices, id: \.self) { index in
                             let estate = estates[index]
-                            HotEstateCell(
-                                data: estate,
-                                cachingKit: cachingKit
-                            )
+                            if let estateId = estate.estateId {
+                                NavigationLink(destination: EstateDetailView(estateId: estateId)) {
+                                    HotEstateCell(
+                                        data: estate,
+                                        cachingKit: cachingKit
+                                    )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            } else {
+                                HotEstateCell(
+                                    data: estate,
+                                    cachingKit: cachingKit
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
