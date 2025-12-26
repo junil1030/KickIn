@@ -15,7 +15,25 @@ struct EstateDetailView: View {
     }
     
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                EstateDetailTopImageView(thumbnails: viewModel.estate?.thumbnails)
+
+                EstateDetailViewingCountView(likeCount: viewModel.estate?.likeCount)
+
+                EstateDetailInfoHeaderView(
+                    isSafeEstate: viewModel.estate?.isSafeEstate,
+                    updatedAt: viewModel.estate?.updatedAt
+                )
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .defaultBackground()
+        .navigationTitle(viewModel.estate?.title ?? "")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await viewModel.loadData()
+        }
     }
 }
 
