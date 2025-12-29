@@ -106,7 +106,7 @@ private extension TodayEstatesTopImageView {
         .foregroundStyle(Color.gray15)
         .font(.caption2())
         .task {
-            locationText = await geocodeService.getLocationString(latitude: latitude, longitude: longitude)
+            locationText = await geocodeService.getSimpleLocationString(latitude: latitude, longitude: longitude)
         }
     }
 

@@ -25,6 +25,15 @@ struct EstateDetailView: View {
                     isSafeEstate: viewModel.estate?.isSafeEstate,
                     updatedAt: viewModel.estate?.updatedAt
                 )
+
+                EstateDetailAddressPriceView(
+                    latitude: viewModel.estate?.geolocation?.latitude,
+                    longitude: viewModel.estate?.geolocation?.longitude,
+                    deposit: viewModel.estate?.deposit,
+                    monthlyRent: viewModel.estate?.monthlyRent,
+                    maintenanceFee: viewModel.estate?.maintenanceFee,
+                    area: viewModel.estate?.area
+                )
             }
             .frame(maxWidth: .infinity)
         }
