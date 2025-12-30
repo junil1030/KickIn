@@ -111,7 +111,7 @@ extension HotEstateCell {
                 .font(.caption2())
                 .foregroundColor(.gray45)
                 .task {
-                    locationText = await geocodeService.getLocationString(latitude: data.latitude, longitude: data.longitude)
+                    locationText = await geocodeService.getSimpleLocationString(latitude: data.latitude, longitude: data.longitude)
                 }
             
             Text("·")

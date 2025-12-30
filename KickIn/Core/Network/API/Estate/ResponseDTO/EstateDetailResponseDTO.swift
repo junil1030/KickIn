@@ -58,8 +58,8 @@ struct EstateDetailResponseDTO: Decodable {
         case isSafeEstate = "is_safe_estate"
         case isRecommended = "is_recommended"
         case comments
-        case createdAt
-        case updatedAt
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
     }
 }
 
@@ -105,7 +105,7 @@ struct EstateCommentDTO: Decodable {
     enum CodingKeys: String, CodingKey {
         case commentId = "comment_id"
         case content
-        case createdAt
+        case createdAt = "created_at"
         case creator
         case replies
     }
