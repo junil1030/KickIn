@@ -11,6 +11,7 @@ import OSLog
 
 final class EstateDetailViewModel: ObservableObject {
     @Published var estate: EstateDetailUIModel?
+    @Published var similarEstates: [SimilarEstateUIModel] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -22,10 +23,11 @@ final class EstateDetailViewModel: ObservableObject {
     init(estateId: String) {
         self.estateId = estateId
     }
-    
+
     // MARK: - Public Methods
     func loadData() async {
         await loadDetail()
+        await loadSimilarEstates()
     }
 }
 
@@ -63,6 +65,27 @@ extension EstateDetailViewModel {
                 self.errorMessage = "매물 상세 정보를 불러오는데 실패했습니다."
                 self.isLoading = false
             }
+        }
+    }
+
+    private func loadSimilarEstates() async {
+        do {
+            let response: SimilarEstatesResponseDTO = try await networkService.request(
+                EstateRouter.similarEstates
+            )
+
+            let estates = response.data?.map { $0.toUIModel() } ?? []
+
+            await MainActor.run {
+                self.similarEstates = estates
+            }
+
+            Logger.network.info("✅ Loaded similar estates: \(estates.count) items")
+
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to load similar estates: \(error.localizedDescription)")
+        } catch {
+            Logger.network.error("❌ Unknown error loading similar estates: \(error.localizedDescription)")
         }
     }
 }

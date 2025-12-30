@@ -34,6 +34,31 @@ struct EstateDetailView: View {
                     maintenanceFee: viewModel.estate?.maintenanceFee,
                     area: viewModel.estate?.area
                 )
+
+                divider()
+
+                EstateDetailOptionView(
+                    options: viewModel.estate?.options,
+                    parkingCount: viewModel.estate?.parkingCount
+                )
+
+                divider()
+
+                EstateDetailDescriptionView(
+                    description: viewModel.estate?.description
+                )
+
+                divider()
+
+                EstateDetailSimilarEstatesView(
+                    estates: viewModel.similarEstates
+                )
+
+                divider()
+
+                EstateDetailAgentInfoView(
+                    creator: viewModel.estate?.creator
+                )
             }
             .frame(maxWidth: .infinity)
         }
@@ -43,6 +68,12 @@ struct EstateDetailView: View {
         .task {
             await viewModel.loadData()
         }
+    }
+    
+    private func divider() -> some View {
+        return Divider()
+            .background(Color.gray30)
+            .padding(.horizontal, 20)
     }
 }
 
