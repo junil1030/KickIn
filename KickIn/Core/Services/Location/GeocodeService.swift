@@ -67,7 +67,7 @@ final class GeocodeService: GeocodeServiceProtocol {
 
         var components: [String] = []
         
-        if let administrativeArea { components.append(administrativeArea) }
+//        if let administrativeArea { components.append(administrativeArea) }
         if let locality { components.append(locality) }
         if let thoroughfare { components.append(thoroughfare) }
         if let subThoroughfare { components.append(subThoroughfare) }

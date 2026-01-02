@@ -54,7 +54,7 @@ struct EstateDetailAddressPriceView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom , 20)
         .padding(.horizontal, 20)
-        .task {
+        .task(id: "\(latitude ?? 0),\(longitude ?? 0)") {
             addressText = await geocodeService.getDetailedLocationString(latitude: latitude, longitude: longitude)
         }
     }
