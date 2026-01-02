@@ -9,8 +9,10 @@ import SwiftUI
 
 struct EstateDetailView: View {
     @StateObject private var viewModel: EstateDetailViewModel
-    
+    private let estateId: String
+
     init(estateId: String) {
+        self.estateId = estateId
         _viewModel = StateObject(wrappedValue: EstateDetailViewModel(estateId: estateId))
     }
     
@@ -47,6 +49,10 @@ struct EstateDetailView: View {
                 EstateDetailDescriptionView(
                     description: viewModel.estate?.description
                 )
+
+                divider()
+
+                EstateDetailPostBoardButton(estateId: estateId)
 
                 divider()
 
