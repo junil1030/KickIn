@@ -46,7 +46,7 @@ enum CommunityPostRouter: APIRouter {
     var path: String {
         return switch self {
         case .uploadFiles: "/posts/files"
-        case .createPost: "/post"
+        case .createPost: "/posts"
         case .getPostsByGeolocation: "/posts/geolocation"
         case .searchPosts: "/posts/search"
         case .getPostDetail(let postId): "/posts/\(postId)"
