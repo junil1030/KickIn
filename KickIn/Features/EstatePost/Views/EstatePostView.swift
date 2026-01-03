@@ -9,8 +9,10 @@ import SwiftUI
 
 struct EstatePostView: View {
     @StateObject private var viewModel: EstatePostViewModel
+    private let estateId: String
 
     init(estateId: String) {
+        self.estateId = estateId
         _viewModel = StateObject(wrappedValue: EstatePostViewModel(estateId: estateId))
     }
 
@@ -123,7 +125,7 @@ struct EstatePostView: View {
             Spacer()
             HStack {
                 Spacer()
-                NavigationLink(destination: CreateEstatePostView()) {
+                NavigationLink(destination: CreateEstatePostView(estateId: estateId)) {
                     Image("Icon/Plus")
                         .renderingMode(.template)
                         .resizable()
