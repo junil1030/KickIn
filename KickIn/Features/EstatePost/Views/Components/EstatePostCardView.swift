@@ -31,6 +31,26 @@ struct EstatePostCardView: View {
                 }
 
                 Spacer()
+
+                // Menu button
+                Menu {
+                    Button(role: .destructive) {
+                        // TODO: 삭제 액션
+                    } label: {
+                        Label("삭제하기", systemImage: "trash")
+                    }
+
+                    Button {
+                        // TODO: 신고 액션
+                    } label: {
+                        Label("신고하기", systemImage: "exclamationmark.bubble")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.gray60)
+                        .frame(width: 32, height: 32)
+                }
             }
 
             // Title (최대 1줄)
