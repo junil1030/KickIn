@@ -12,6 +12,7 @@ struct EstatePostCardView: View {
     @Environment(\.cachingKit) private var cachingKit
 
     let post: EstatePostUIModel
+    let onDelete: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -35,7 +36,7 @@ struct EstatePostCardView: View {
                 // Menu button
                 Menu {
                     Button(role: .destructive) {
-                        // TODO: 삭제 액션
+                        onDelete(post.id)
                     } label: {
                         Label("삭제하기", systemImage: "trash")
                     }
@@ -147,7 +148,10 @@ private extension EstatePostCardView {
                 content: "이 매물 실제로 보고 왔는데 사진보다 훨씬 좋네요! 채광도 좋고 주변 환경도 깔끔합니다.",
                 likeCount: 12,
                 createdAt: "2024-07-21T14:00:00.000Z"
-            )
+            ),
+            onDelete: { postId in
+                print("Delete post: \(postId)")
+            }
         )
 
         Divider()
@@ -163,7 +167,10 @@ private extension EstatePostCardView {
                 content: "주차 공간이 넉넉한지 궁금합니다.",
                 likeCount: 5,
                 createdAt: "2024-07-21T12:00:00.000Z"
-            )
+            ),
+            onDelete: { postId in
+                print("Delete post: \(postId)")
+            }
         )
     }
     .background(Color.gray15)

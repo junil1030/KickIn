@@ -95,7 +95,14 @@ struct EstatePostView: View {
         VStack(spacing: 0) {
             ForEach(viewModel.posts) { post in
                 NavigationLink(destination: PostDetailView(postId: post.id)) {
-                    EstatePostCardView(post: post)
+                    EstatePostCardView(
+                        post: post,
+                        onDelete: { postId in
+                            Task {
+                                await viewModel.deletePost(postId: postId)
+                            }
+                        }
+                    )
                 }
                 .buttonStyle(PlainButtonStyle())
                 .task {
