@@ -9,25 +9,31 @@ import SwiftUI
 
 struct EstatePostView: View {
     @StateObject private var viewModel: EstatePostViewModel
+    private let estateId: String
 
     init(estateId: String) {
+        self.estateId = estateId
         _viewModel = StateObject(wrappedValue: EstatePostViewModel(estateId: estateId))
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                if viewModel.isLoading {
-                    loadingView()
-                } else if let errorMessage = viewModel.errorMessage {
-                    errorView(message: errorMessage)
-                } else if viewModel.posts.isEmpty {
-                    emptyView()
-                } else {
-                    postsListView()
+        ZStack {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    if viewModel.isLoading {
+                        loadingView()
+                    } else if let errorMessage = viewModel.errorMessage {
+                        errorView(message: errorMessage)
+                    } else if viewModel.posts.isEmpty {
+                        emptyView()
+                    } else {
+                        postsListView()
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+            
+            floatingButton()
         }
         .defaultBackground()
         .navigationTitle("게시판")
@@ -112,6 +118,27 @@ struct EstatePostView: View {
             }
         }
         .padding(.top, 16)
+    }
+    
+    private func floatingButton() -> some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                NavigationLink(destination: CreateEstatePostView(estateId: estateId)) {
+                    Image("Icon/Plus")
+                        .renderingMode(.template)
+                        .resizable()
+                        .frame(width: 24, height: 24)
+                        .foregroundStyle(Color.gray0)
+                }
+                .frame(width: 50, height: 50)
+                .background(Color.deepCream)
+                .clipShape(Circle())
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
+            }
+        }
     }
 }
 
