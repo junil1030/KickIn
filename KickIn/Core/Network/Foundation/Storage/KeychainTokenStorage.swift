@@ -11,6 +11,7 @@ import Security
 actor KeychainTokenStorage: TokenStorageProtocol {
     private let accessTokenKey = "com.KickIn.accessToken"
     private let refreshTokenKey = "com.KickIn.refreshToken"
+    private let userIdKey = "com.KickIn.userId"
     private let service = "com.KickIn.app"
 
     func getAccessToken() async -> String? {
@@ -21,6 +22,10 @@ actor KeychainTokenStorage: TokenStorageProtocol {
         return await getToken(for: refreshTokenKey)
     }
 
+    func getUserId() async -> String? {
+        return await getToken(for: userIdKey)
+    }
+
     func setAccessToken(_ token: String) async {
         await setToken(token, for: accessTokenKey)
     }
@@ -29,9 +34,14 @@ actor KeychainTokenStorage: TokenStorageProtocol {
         await setToken(token, for: refreshTokenKey)
     }
 
+    func setUserId(_ userId: String) async {
+        await setToken(userId, for: userIdKey)
+    }
+
     func clearTokens() async {
         await deleteToken(for: accessTokenKey)
         await deleteToken(for: refreshTokenKey)
+        await deleteToken(for: userIdKey)
     }
 
     // MARK: - Private Keychain Operations
