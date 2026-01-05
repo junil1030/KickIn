@@ -23,6 +23,7 @@ struct ContentView: View {
             } else if isAuthenticated {
                 // 로그인 됨 → MainTabView
                 MainTabView()
+                    .environment(\.logoutAction, handleLogout)
             } else {
                 // 로그인 안됨 → LoginView
                 LoginView(onLoginSuccess: {
@@ -33,6 +34,10 @@ struct ContentView: View {
         .task {
             await checkAutoLogin()
         }
+    }
+
+    private func handleLogout() {
+        isAuthenticated = false
     }
 
     private func checkAutoLogin() async {

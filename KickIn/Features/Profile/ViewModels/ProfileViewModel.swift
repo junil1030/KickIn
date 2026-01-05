@@ -15,6 +15,7 @@ final class ProfileViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
+    private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
 
     // MARK: - Public Methods
 
@@ -49,5 +50,13 @@ final class ProfileViewModel: ObservableObject {
                 self.isLoading = false
             }
         }
+    }
+
+    func logout() async {
+        Logger.auth.info("📡 Logging out user")
+
+        await tokenStorage.clearTokens()
+
+        Logger.auth.info("✅ Logout successful - tokens cleared")
     }
 }

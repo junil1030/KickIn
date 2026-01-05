@@ -132,21 +132,36 @@ final class LoginViewModel: ObservableObject {
         do {
             let response: LoginResponseDTO = try await networkService.request(router)
 
-            // 토큰 저장
+            // 토큰 및 사용자 정보 저장
             if let accessToken = response.accessToken,
-               let refreshToken = response.refreshToken {
+               let refreshToken = response.refreshToken,
+               let userId = response.userId {
+
+                Logger.auth.info("🔑 Saving tokens and userId to Keychain...")
+                Logger.auth.info("📝 User ID to save: \(userId)")
 
                 await tokenStorage.setAccessToken(accessToken)
                 await tokenStorage.setRefreshToken(refreshToken)
+                await tokenStorage.setUserId(userId)
+
+                // 저장 확인
+                if let savedUserId = await tokenStorage.getUserId() {
+                    Logger.auth.info("✅ User ID successfully saved to Keychain: \(savedUserId)")
+                } else {
+                    Logger.auth.error("❌ Failed to save User ID to Keychain")
+                }
+
 #if DEBUG
                 Logger.auth.info("Access Token: \(accessToken)")
                 Logger.auth.info("Refresh Token: \(refreshToken)")
 #endif
-                
+
                 await MainActor.run {
                     isLoading = false
                     onLoginSuccess?()
                 }
+            } else {
+                Logger.auth.error("❌ Missing required fields in login response - accessToken: \(response.accessToken != nil), refreshToken: \(response.refreshToken != nil), userId: \(response.userId != nil)")
             }
         } catch let error as NetworkError {
             Logger.auth.error("NetworkError: \(error.localizedDescription)")
