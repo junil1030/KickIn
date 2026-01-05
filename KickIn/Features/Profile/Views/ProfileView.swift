@@ -11,6 +11,7 @@ import CachingKit
 struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @Environment(\.cachingKit) private var cachingKit
+    @Environment(\.logoutAction) private var logoutAction
 
     var body: some View {
         ScrollView {
@@ -48,6 +49,24 @@ struct ProfileView: View {
                                 .foregroundStyle(Color.gray45)
                         }
                     }
+
+                    // 로그아웃 버튼
+                    Button(action: {
+                        Task {
+                            await viewModel.logout()
+                            logoutAction()
+                        }
+                    }) {
+                        Text("로그아웃")
+                            .font(.body2(.pretendardBold))
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.red)
+                            .cornerRadius(8)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
 
                     Spacer()
                 }
