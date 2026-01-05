@@ -17,27 +17,38 @@ struct PostDetailView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 20) {
-                if viewModel.isLoading {
-                    loadingView()
-                } else if let errorMessage = viewModel.errorMessage {
-                    errorView(message: errorMessage)
-                } else if let post = viewModel.post {
-                    postContentView(post: post)
+        VStack(spacing: 0) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 20) {
+                    if viewModel.isLoading {
+                        loadingView()
+                    } else if let errorMessage = viewModel.errorMessage {
+                        errorView(message: errorMessage)
+                    } else if let post = viewModel.post {
+                        postContentView(post: post)
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+
+            commentInputView()
         }
         .defaultBackground()
         .navigationTitle("게시글 상세")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .task {
             await viewModel.loadPostDetail()
         }
     }
 
     // MARK: - Subviews
+
+    private func totalCommentCount(post: PostDetailUIModel) -> Int {
+        let commentCount = post.comments.count
+        let replyCount = post.comments.reduce(0) { $0 + $1.replies.count }
+        return commentCount + replyCount
+    }
 
     private func loadingView() -> some View {
         VStack(spacing: 12) {
@@ -83,7 +94,7 @@ struct PostDetailView: View {
                         .font(.body2(.pretendardBold))
                         .foregroundStyle(Color.gray90)
 
-                    Text(post.createdAt)
+                    Text(post.createdAt.commentTimeAgo ?? "알 수 없음")
                         .font(.caption1(.pretendardRegular))
                         .foregroundStyle(Color.gray60)
                 }
@@ -114,68 +125,120 @@ struct PostDetailView: View {
             }
 
             // 댓글 수
-            Text("댓글 \(post.comments.count)개")
+            Text("댓글 \(totalCommentCount(post: post))개")
                 .font(.body2(.pretendardBold))
                 .foregroundStyle(Color.gray90)
                 .padding(.top, 8)
 
             // 댓글 목록
             ForEach(post.comments) { comment in
-                commentView(comment: comment)
+                commentView(comment: comment, postAuthorId: post.authorId)
+                    .padding(.bottom, comment.id != post.comments.last?.id ? 20 : 0)
             }
         }
         .padding(20)
     }
 
-    private func commentView(comment: PostCommentUIModel) -> some View {
+    private func commentView(comment: PostCommentUIModel, postAuthorId: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                authorProfileImageView(comment.authorProfileImage, authorName: comment.authorName, size: 32)
+            HStack(alignment: .top, spacing: 8) {
+                authorProfileImageView(comment.authorProfileImage, authorName: comment.authorName, size: 36)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // 작성자 이름
                     Text(comment.authorName)
-                        .font(.caption1(.pretendardBold))
+                        .font(.body3(.pretendardBold))
                         .foregroundStyle(Color.gray90)
 
-                    Text(comment.createdAt)
-                        .font(.caption2(.pretendardRegular))
-                        .foregroundStyle(Color.gray60)
+                    // 댓글 내용
+                    Text(comment.content)
+                        .font(.body2(.pretendardRegular))
+                        .foregroundStyle(Color.gray90)
+
+                    // 시간 및 작성자 표시
+                    HStack(spacing: 4) {
+                        if let timeAgo = comment.createdAt.commentTimeAgo {
+                            Text(timeAgo)
+                                .font(.caption2(.pretendardRegular))
+                                .foregroundStyle(Color.gray60)
+                        }
+
+                        if comment.authorId == postAuthorId {
+                            Text("•")
+                                .font(.caption2(.pretendardRegular))
+                                .foregroundStyle(Color.gray60)
+
+                            Text("작성자")
+                                .font(.caption2(.pretendardRegular))
+                                .foregroundStyle(Color.gray60)
+                        }
+
+                        Text("•")
+                            .font(.caption2(.pretendardRegular))
+                            .foregroundStyle(Color.gray60)
+
+                        Button(action: {
+                            viewModel.setReplyTo(commentId: comment.id, nick: comment.authorName)
+                        }) {
+                            Text("답글 달기")
+                                .font(.caption2(.pretendardBold))
+                                .foregroundStyle(Color.gray60)
+                        }
+                    }
                 }
+
+                Spacer()
             }
 
-            Text(comment.content)
-                .font(.body2(.pretendardRegular))
-                .foregroundStyle(Color.gray90)
-                .padding(.leading, 40)
-
             // 대댓글들
-            ForEach(comment.replies) { reply in
-                replyView(reply: reply)
-                    .padding(.leading, 40)
+            if !comment.replies.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(comment.replies) { reply in
+                        replyView(reply: reply, postAuthorId: postAuthorId)
+                    }
+                }
+                .padding(.leading, 44)
+                .padding(.top, 8)
             }
         }
     }
 
-    private func replyView(reply: PostCommentReplyUIModel) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                authorProfileImageView(reply.authorProfileImage, authorName: reply.authorName, size: 28)
+    private func replyView(reply: PostCommentReplyUIModel, postAuthorId: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            authorProfileImageView(reply.authorProfileImage, authorName: reply.authorName, size: 32)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(reply.authorName)
-                        .font(.caption1(.pretendardBold))
-                        .foregroundStyle(Color.gray90)
+            VStack(alignment: .leading, spacing: 4) {
+                // 작성자 이름
+                Text(reply.authorName)
+                    .font(.body3(.pretendardBold))
+                    .foregroundStyle(Color.gray90)
 
-                    Text(reply.createdAt)
-                        .font(.caption2(.pretendardRegular))
-                        .foregroundStyle(Color.gray60)
+                // 답글 내용
+                Text(reply.content)
+                    .font(.body2(.pretendardRegular))
+                    .foregroundStyle(Color.gray90)
+
+                // 시간 및 작성자 표시
+                HStack(spacing: 4) {
+                    if let timeAgo = reply.createdAt.commentTimeAgo {
+                        Text(timeAgo)
+                            .font(.caption2(.pretendardRegular))
+                            .foregroundStyle(Color.gray60)
+                    }
+
+                    if reply.authorId == postAuthorId {
+                        Text("•")
+                            .font(.caption2(.pretendardRegular))
+                            .foregroundStyle(Color.gray60)
+
+                        Text("작성자")
+                            .font(.caption2(.pretendardRegular))
+                            .foregroundStyle(Color.gray60)
+                    }
                 }
             }
 
-            Text(reply.content)
-                .font(.body2(.pretendardRegular))
-                .foregroundStyle(Color.gray90)
-                .padding(.leading, 36)
+            Spacer()
         }
     }
 
@@ -250,6 +313,72 @@ struct PostDetailView: View {
                             .foregroundStyle(Color.gray60)
                     }
             }
+        }
+    }
+
+    private func commentInputView() -> some View {
+        VStack(spacing: 0) {
+            Divider()
+                .background(Color.gray30)
+
+            // 답글 대상 표시
+            if let replyToNick = viewModel.replyToNick {
+                HStack {
+                    Text("@\(replyToNick)")
+                        .font(.caption1(.pretendardBold))
+                        .foregroundStyle(Color.gray75)
+
+                    Spacer()
+
+                    Button(action: {
+                        viewModel.cancelReply()
+                    }) {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(Color.gray60)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.gray15)
+            }
+
+            HStack(spacing: 12) {
+                TextField("댓글을 입력하세요", text: $viewModel.commentText, axis: .vertical)
+                    .font(.body2(.pretendardRegular))
+                    .foregroundStyle(Color.gray90)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color.gray15)
+                    .cornerRadius(20)
+                    .lineLimit(1...5)
+
+                Button(action: {
+                    Task {
+                        await viewModel.createComment()
+                    }
+                }) {
+                    if viewModel.isCommentLoading {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .frame(width: 40, height: 40)
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundStyle(
+                                viewModel.commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? Color.gray45
+                                : Color.deepCream
+                            )
+                    }
+                }
+                .disabled(
+                    viewModel.commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || viewModel.isCommentLoading
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.gray0)
         }
     }
 }

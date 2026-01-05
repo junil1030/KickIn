@@ -37,4 +37,37 @@ extension String {
             return "\(days)일 전"
         }
     }
+
+    var commentTimeAgo: String? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        guard let date = formatter.date(from: self) else {
+            return nil
+        }
+
+        let now = Date()
+        let calendar = Calendar.current
+
+        // 날짜가 같은지 확인
+        if calendar.isDate(date, inSameDayAs: now) {
+            // 같은 날이면 분/시간 차이 계산
+            let components = calendar.dateComponents([.hour, .minute], from: date, to: now)
+            let hours = components.hour ?? 0
+            let minutes = components.minute ?? 0
+
+            if hours == 0 {
+                // 1시간 미만이면 분으로 표시
+                return "\(minutes)분 전"
+            } else {
+                // 1시간 이상이면 시간으로 표시
+                return "\(hours)시간 전"
+            }
+        } else {
+            // 다른 날이면 일 차이 계산
+            let components = calendar.dateComponents([.day], from: date, to: now)
+            let days = components.day ?? 0
+            return "\(days)일 전"
+        }
+    }
 }

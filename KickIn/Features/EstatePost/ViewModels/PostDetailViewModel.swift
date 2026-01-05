@@ -13,6 +13,10 @@ final class PostDetailViewModel: ObservableObject {
     @Published var post: PostDetailUIModel?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var commentText = ""
+    @Published var isCommentLoading = false
+    @Published var replyToCommentId: String?
+    @Published var replyToNick: String?
 
     private let postId: String
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
@@ -65,5 +69,63 @@ final class PostDetailViewModel: ObservableObject {
                 self.isLoading = false
             }
         }
+    }
+
+    func createComment() async {
+        guard !commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        await MainActor.run {
+            isCommentLoading = true
+        }
+
+        Logger.network.info("📡 Creating comment for postId: \(self.postId)")
+
+        do {
+            let requestDTO = PostCommentRequestDTO(
+                parentCommentId: replyToCommentId,
+                content: commentText
+            )
+
+            let _: PostResponseDTO = try await networkService.request(
+                CommunityPostCommentRouter.createComment(postId: postId, requestDTO)
+            )
+
+            await MainActor.run {
+                self.commentText = ""
+                self.replyToCommentId = nil
+                self.replyToNick = nil
+                self.isCommentLoading = false
+            }
+
+            Logger.network.info("✅ Comment created successfully")
+
+            // Reload post detail to update comments
+            await loadPostDetail()
+
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to create comment: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isCommentLoading = false
+            }
+        } catch {
+            Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = "댓글 작성에 실패했습니다."
+                self.isCommentLoading = false
+            }
+        }
+    }
+
+    func setReplyTo(commentId: String, nick: String) {
+        replyToCommentId = commentId
+        replyToNick = nick
+    }
+
+    func cancelReply() {
+        replyToCommentId = nil
+        replyToNick = nil
     }
 }
