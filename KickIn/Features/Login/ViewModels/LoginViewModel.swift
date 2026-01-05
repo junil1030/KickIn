@@ -132,17 +132,20 @@ final class LoginViewModel: ObservableObject {
         do {
             let response: LoginResponseDTO = try await networkService.request(router)
 
-            // 토큰 저장
+            // 토큰 및 사용자 정보 저장
             if let accessToken = response.accessToken,
-               let refreshToken = response.refreshToken {
+               let refreshToken = response.refreshToken,
+               let userId = response.userId {
 
                 await tokenStorage.setAccessToken(accessToken)
                 await tokenStorage.setRefreshToken(refreshToken)
+                await tokenStorage.setUserId(userId)
 #if DEBUG
                 Logger.auth.info("Access Token: \(accessToken)")
                 Logger.auth.info("Refresh Token: \(refreshToken)")
+                Logger.auth.info("User ID: \(userId)")
 #endif
-                
+
                 await MainActor.run {
                     isLoading = false
                     onLoginSuccess?()
