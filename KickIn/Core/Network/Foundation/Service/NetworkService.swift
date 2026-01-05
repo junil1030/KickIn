@@ -106,21 +106,24 @@ final class NetworkService: NetworkServiceProtocol {
     // MARK: - Private Methods
 
     private func mapError(_ error: AFError, data: Data?, statusCode: Int?) -> NetworkError {
+        // 먼저 에러 메시지 추출 시도
+        let message = extractErrorMessage(from: data)
+
         if let statusCode = statusCode {
             switch statusCode {
             case 400:
-                let message = extractErrorMessage(from: data)
                 return .badRequest(message: message)
             case 401:
                 return .unauthorized
             case 403:
-                return .forbidden
+                return .forbidden(message: message)
             case 404:
                 return .notFound
             case 500...599:
-                return .serverError
+                return .serverError(message: message)
             default:
-                break
+                // 그 외 HTTP 상태 코드 (예: 445)
+                return .httpError(statusCode: statusCode, message: message)
             }
         }
 

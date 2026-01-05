@@ -13,6 +13,7 @@ final class EstatePostViewModel: ObservableObject {
     @Published var posts: [EstatePostUIModel] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var deleteMessage: String?
 
     private let estateId: String
     private var nextCursor: String? = nil
@@ -37,6 +38,37 @@ final class EstatePostViewModel: ObservableObject {
         guard hasMoreData && !isLoading else { return }
 
         await fetchPosts(cursor: nextCursor)
+    }
+
+    func deletePost(postId: String) async {
+        await MainActor.run {
+            deleteMessage = nil
+        }
+
+        do {
+            let response: MessageResponseDTO = try await networkService.request(
+                CommunityPostRouter.deletePost(postId: postId)
+            )
+
+            await MainActor.run {
+                // 성공 시 배열에서 제거
+                self.posts.removeAll { $0.id == postId }
+                self.deleteMessage = response.message
+            }
+
+            Logger.network.info("✅ Post deleted successfully: \(postId)")
+
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to delete post: \(error.localizedDescription)")
+            await MainActor.run {
+                self.deleteMessage = error.localizedDescription
+            }
+        } catch {
+            Logger.network.error("❌ Unknown error while deleting post: \(error.localizedDescription)")
+            await MainActor.run {
+                self.deleteMessage = "게시글 삭제에 실패했습니다."
+            }
+        }
     }
 }
 

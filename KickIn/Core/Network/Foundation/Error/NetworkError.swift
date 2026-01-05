@@ -9,10 +9,11 @@ import Foundation
 
 enum NetworkError: Error {
     case unauthorized
-    case forbidden
+    case forbidden(message: String?)
     case notFound
     case badRequest(message: String?)
-    case serverError
+    case serverError(message: String?)
+    case httpError(statusCode: Int, message: String?)
     case decodingError
     case networkFailure(Error)
     case invalidURL
@@ -23,14 +24,16 @@ enum NetworkError: Error {
         switch self {
         case .unauthorized:
             return "인증이 필요합니다."
-        case .forbidden:
-            return "접근 권한이 없습니다."
+        case .forbidden(let message):
+            return message ?? "접근 권한이 없습니다."
         case .notFound:
             return "요청한 리소스를 찾을 수 없습니다."
         case .badRequest(let message):
             return message ?? "잘못된 요청입니다."
-        case .serverError:
-            return "서버 오류가 발생했습니다."
+        case .serverError(let message):
+            return message ?? "서버 오류가 발생했습니다."
+        case .httpError(_, let message):
+            return message ?? "요청 처리 중 오류가 발생했습니다."
         case .decodingError:
             return "데이터 파싱 오류가 발생했습니다."
         case .networkFailure(let error):
