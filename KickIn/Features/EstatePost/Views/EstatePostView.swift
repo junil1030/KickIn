@@ -38,6 +38,7 @@ struct EstatePostView: View {
         .defaultBackground()
         .navigationTitle("게시판")
         .navigationBarTitleDisplayMode(.inline)
+        .toast(message: $viewModel.deleteMessage)
         .task {
             await viewModel.loadPosts()
         }
