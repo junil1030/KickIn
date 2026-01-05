@@ -74,6 +74,53 @@ final class NetworkService: NetworkServiceProtocol {
             }
         }
     }
+    
+    func request(_ router: any APIRouter) async throws {
+        Logger.network.debug("Request started: \(String(describing: router))")
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                
+#if DEBUG
+                let urlRequest = try router.asURLRequest()
+                Logger.network.debug("URL: \(urlRequest.url?.absoluteString ?? "nil")")
+                Logger.network.debug("Method: \(urlRequest.method?.rawValue ?? "nil")")
+                Logger.network.debug("Headers: \(urlRequest.headers.dictionary)")
+                
+                if let body = urlRequest.httpBody, let bodyString = String(data: body, encoding: .utf8) {
+                    Logger.network.debug("Body: \(bodyString)")
+                }
+#endif
+                
+                session.request(router)
+                    .validate()
+                    .response { response in
+                        Logger.network.debug("Response received")
+                        Logger.network.debug("Status Code: \(response.response?.statusCode ?? 0)")
+
+#if DEBUG
+                        if let data = response.data, let dataString = String(data: data, encoding: .utf8) {
+                            Logger.network.debug("Response Data: \(dataString)")
+                        }
+#endif
+                        switch response.result {
+                        case .success:
+                            continuation.resume()
+                        case .failure(let error):
+                            let networkError = self.mapError(
+                                error,
+                                data: response.data,
+                                statusCode: response.response?.statusCode
+                            )
+                            continuation.resume(throwing: networkError)
+                        }
+                    }
+            } catch {
+                Logger.network.error("Failed to create URLRequest: \(error.localizedDescription)")
+                continuation.resume(throwing: NetworkError.invalidURL)
+            }
+        }
+    }
 
     func upload<T: Decodable>(
         _ router: any APIRouter,

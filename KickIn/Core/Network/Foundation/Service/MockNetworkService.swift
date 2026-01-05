@@ -28,6 +28,16 @@ final class MockNetworkService: NetworkServiceProtocol {
 
         throw NetworkError.decodingError
     }
+    
+    func request(_ router: any APIRouter) async throws {
+        requestCallCount += 1
+
+        if !shouldSucceed, let error = mockError {
+            throw error
+        }
+
+        throw NetworkError.decodingError
+    }
 
     func upload<T: Decodable>(
         _ router: any APIRouter,
