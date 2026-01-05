@@ -184,6 +184,24 @@ struct PostDetailView: View {
                                 .font(.caption2(.pretendardBold))
                                 .foregroundStyle(Color.gray60)
                         }
+
+                        // 본인 댓글일 경우 삭제 버튼
+                        if let currentUserId = viewModel.currentUserId,
+                           comment.authorId == currentUserId {
+                            Text("•")
+                                .font(.caption2(.pretendardRegular))
+                                .foregroundStyle(Color.gray60)
+
+                            Button(action: {
+                                Task {
+                                    await viewModel.deleteComment(commentId: comment.id)
+                                }
+                            }) {
+                                Text("삭제")
+                                    .font(.caption2(.pretendardBold))
+                                    .foregroundStyle(Color.red)
+                            }
+                        }
                     }
                 }
 
@@ -234,6 +252,24 @@ struct PostDetailView: View {
                         Text("작성자")
                             .font(.caption2(.pretendardRegular))
                             .foregroundStyle(Color.gray60)
+                    }
+
+                    // 본인 대댓글일 경우 삭제 버튼
+                    if let currentUserId = viewModel.currentUserId,
+                       reply.authorId == currentUserId {
+                        Text("•")
+                            .font(.caption2(.pretendardRegular))
+                            .foregroundStyle(Color.gray60)
+
+                        Button(action: {
+                            Task {
+                                await viewModel.deleteComment(commentId: reply.id)
+                            }
+                        }) {
+                            Text("삭제")
+                                .font(.caption2(.pretendardBold))
+                                .foregroundStyle(Color.red)
+                        }
                     }
                 }
             }

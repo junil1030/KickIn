@@ -17,14 +17,19 @@ final class PostDetailViewModel: ObservableObject {
     @Published var isCommentLoading = false
     @Published var replyToCommentId: String?
     @Published var replyToNick: String?
+    @Published var currentUserId: String?
 
     private let postId: String
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
+    private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
 
     // MARK: - Initialization
 
     init(postId: String) {
         self.postId = postId
+        Task {
+            await loadCurrentUserId()
+        }
     }
 
     // MARK: - Public Methods
@@ -127,5 +132,41 @@ final class PostDetailViewModel: ObservableObject {
     func cancelReply() {
         replyToCommentId = nil
         replyToNick = nil
+    }
+
+    func deleteComment(commentId: String) async {
+        Logger.network.info("📡 Deleting comment: \(commentId)")
+
+        do {
+            let _: PostResponseDTO = try await networkService.request(
+                CommunityPostCommentRouter.deleteComment(postId: postId, commentId: commentId)
+            )
+
+            Logger.network.info("✅ Comment deleted successfully")
+
+            // Reload post detail to update comments
+            await loadPostDetail()
+
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to delete comment: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+            }
+        } catch {
+            Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = "댓글 삭제에 실패했습니다."
+            }
+        }
+    }
+
+    // MARK: - Private Methods
+
+    private func loadCurrentUserId() async {
+        let userId = await tokenStorage.getUserId()
+        await MainActor.run {
+            self.currentUserId = userId
+        }
+        Logger.network.info("Current User ID: \(userId ?? "nil")")
     }
 }
