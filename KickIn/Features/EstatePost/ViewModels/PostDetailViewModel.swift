@@ -138,9 +138,7 @@ final class PostDetailViewModel: ObservableObject {
         Logger.network.info("📡 Deleting comment: \(commentId)")
 
         do {
-            let _: PostResponseDTO = try await networkService.request(
-                CommunityPostCommentRouter.deleteComment(postId: postId, commentId: commentId)
-            )
+            try await networkService.request(CommunityPostCommentRouter.deleteComment(postId: postId, commentId: commentId))
 
             Logger.network.info("✅ Comment deleted successfully")
 
