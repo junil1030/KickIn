@@ -13,6 +13,7 @@ struct MainTabView: View {
     enum Tab {
         case home
         case interest
+        case chat
         case profile
     }
 
@@ -55,6 +56,18 @@ struct MainTabView: View {
                 }
             }
             .tag(Tab.interest)
+
+            NavigationStack {
+                ChatRoomListView()
+            }
+            .tabItem {
+                Label {
+                    Text("채팅")
+                } icon: {
+                    Image(systemName: selectedTab == .chat ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
+                }
+            }
+            .tag(Tab.chat)
 
             NavigationStack {
                 ProfileView()
