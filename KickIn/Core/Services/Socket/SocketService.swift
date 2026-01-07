@@ -25,13 +25,17 @@ final class SocketService: SocketServiceProtocol {
     private var connectionContinuation: AsyncStream<Bool>.Continuation?
 
     lazy var messages: AsyncStream<ChatMessageItemDTO> = {
-        AsyncStream { [weak self] continuation in
+        Logger.chat.info("🔧 [SocketService] Creating messages AsyncStream (lazy init)")
+        return AsyncStream { [weak self] continuation in
+            Logger.chat.info("🔧 [SocketService] messages AsyncStream continuation initialized")
             self?.messageContinuation = continuation
         }
     }()
 
     lazy var connectionStates: AsyncStream<Bool> = {
-        AsyncStream { [weak self] continuation in
+        Logger.chat.info("🔧 [SocketService] Creating connectionStates AsyncStream (lazy init)")
+        return AsyncStream { [weak self] continuation in
+            Logger.chat.info("🔧 [SocketService] connectionStates AsyncStream continuation initialized")
             self?.connectionContinuation = continuation
         }
     }()
@@ -47,19 +51,25 @@ final class SocketService: SocketServiceProtocol {
     // MARK: - Public Methods
 
     func prepareNewConnection() {
+        Logger.chat.info("🔄 [SocketService] prepareNewConnection called")
+
         // 기존 스트림 종료
+        Logger.chat.info("🔄 [SocketService] Finishing existing continuations")
         messageContinuation?.finish()
         connectionContinuation?.finish()
 
         // 새 스트림 생성
+        Logger.chat.info("🔄 [SocketService] Creating new AsyncStreams")
         messages = AsyncStream { [weak self] continuation in
+            Logger.chat.info("🔄 [SocketService] New messages continuation initialized")
             self?.messageContinuation = continuation
         }
         connectionStates = AsyncStream { [weak self] continuation in
+            Logger.chat.info("🔄 [SocketService] New connectionStates continuation initialized")
             self?.connectionContinuation = continuation
         }
 
-        Logger.chat.info("🔄 New AsyncStreams prepared")
+        Logger.chat.info("🔄 [SocketService] New AsyncStreams prepared")
     }
 
     func connect(roomID: String) async {
@@ -171,8 +181,14 @@ final class SocketService: SocketServiceProtocol {
             }
 
             Logger.chat.info("✅ [SocketService] Decoded message, yielding to AsyncStream: \(message.chatId ?? "unknown")")
-            self.messageContinuation?.yield(message)
-            Logger.chat.info("✅ [SocketService] Message yielded to AsyncStream")
+
+            if self.messageContinuation == nil {
+                Logger.chat.error("❌ [SocketService] messageContinuation is nil! Cannot yield message.")
+            } else {
+                Logger.chat.info("✅ [SocketService] messageContinuation exists, yielding...")
+                self.messageContinuation?.yield(message)
+                Logger.chat.info("✅ [SocketService] Message yielded to AsyncStream")
+            }
         }
 
         // 에러
