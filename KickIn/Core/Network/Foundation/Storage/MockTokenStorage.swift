@@ -11,11 +11,13 @@ import Foundation
 actor MockTokenStorage: TokenStorageProtocol {
     private var accessToken: String?
     private var refreshToken: String?
+    private var fcmToken: String?
     private var userId: String?
 
-    init(accessToken: String? = nil, refreshToken: String? = nil, userId: String? = nil) {
+    init(accessToken: String? = nil, refreshToken: String? = nil, fcmToken: String? = nil, userId: String? = nil) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
+        self.fcmToken = fcmToken
         self.userId = userId
     }
 
@@ -25,6 +27,10 @@ actor MockTokenStorage: TokenStorageProtocol {
 
     func getRefreshToken() async -> String? {
         refreshToken
+    }
+    
+    func getFCMToken() async -> String? {
+        fcmToken
     }
 
     func getUserId() async -> String? {
@@ -38,6 +44,10 @@ actor MockTokenStorage: TokenStorageProtocol {
     func setRefreshToken(_ token: String) async {
         refreshToken = token
     }
+    
+    func setFCMToken(_ token: String) async {
+        fcmToken = token
+    }
 
     func setUserId(_ userId: String) async {
         self.userId = userId
@@ -46,6 +56,7 @@ actor MockTokenStorage: TokenStorageProtocol {
     func clearTokens() async {
         accessToken = nil
         refreshToken = nil
+        fcmToken = nil
         userId = nil
     }
 }

@@ -18,11 +18,20 @@ import UIKit
 final class LoginViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
-
-    private let networkService = NetworkServiceFactory.shared.makeNetworkService()
-    private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
+    
+    private let networkService: NetworkServiceProtocol
+    private let tokenStorage: TokenStorageProtocol
 
     var onLoginSuccess: (() -> Void)?
+    
+    // MARK: - Initialization
+    init(
+        networkService: NetworkServiceProtocol = NetworkServiceFactory.shared.makeNetworkService(),
+        tokenStorage: TokenStorageProtocol = NetworkServiceFactory.shared.getTokenStorage()
+    ) {
+        self.networkService = networkService
+        self.tokenStorage = tokenStorage
+    }
 
     // MARK: - Apple Sign In
 
@@ -179,20 +188,26 @@ final class LoginViewModel: ObservableObject {
     }
 
     private func performKakaoLogin(oauthToken: String) async {
+        
+        let fcmToken = await tokenStorage.getFCMToken()
+        Logger.auth.info("FCM Token: \(fcmToken ?? "FCM 토큰을 가져올 수 없음")")
+        
         let requestDTO = KakaoLoginRequestDTO(
             oauthToken: oauthToken,
-            deviceToken: "TestJunil"
-            // MARK: - ToDo: 추후 푸시 알림 구현 시 deviceToken 추가
+            deviceToken: fcmToken
         )
 
         await performSocialLogin(UserRouter.kakaoLogin(requestDTO))
     }
 
     private func performAppleLogin(credential: AppleLoginCredential) async {
+        
+        let fcmToken = await tokenStorage.getFCMToken()
+        Logger.auth.info("FCM Token: \(fcmToken ?? "FCM 토큰을 가져올 수 없음")")
+        
         let requestDTO = AppleLoginRequestDTO(
             idToken: credential.identityToken,
-            deviceToken: "TestJunil"
-            // MARK: - ToDo: 추후 푸시 알림 구현 시 deviceToken 추가
+            deviceToken: fcmToken
         )
 
         await performSocialLogin(UserRouter.appleLogin(requestDTO))

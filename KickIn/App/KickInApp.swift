@@ -12,6 +12,7 @@ import OSLog
 
 @main
 struct KickInApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     private let cachingKit = NetworkServiceFactory.shared.getCachingKit()
 
     init() {
