@@ -14,8 +14,11 @@ struct ChatDetailView: View {
 
     let otherParticipantName: String
 
-    init(roomId: String, otherParticipantName: String) {
-        self._viewModel = StateObject(wrappedValue: ChatDetailViewModel(roomId: roomId))
+    init(roomId: String, opponentUserId: String, otherParticipantName: String) {
+        self._viewModel = StateObject(wrappedValue: ChatDetailViewModel(
+            roomId: roomId,
+            opponentUserId: opponentUserId
+        ))
         self.otherParticipantName = otherParticipantName
     }
 
@@ -48,15 +51,15 @@ struct ChatDetailView: View {
                                     myUserId: viewModel.myUserId
                                 )
                                 .id(item.id)
-                                .onAppear {
-                                    // 마지막 메시지에 도달하면 더 로드
-                                    if case .message(let lastConfig) = viewModel.chatItems.last,
-                                       lastConfig.id == config.id {
-                                        Task {
-                                            await viewModel.loadMoreMessages()
-                                        }
-                                    }
-                                }
+//                                .onAppear {
+//                                    // 마지막 메시지에 도달하면 더 로드
+//                                    if case .message(let lastConfig) = viewModel.chatItems.last,
+//                                       lastConfig.id == config.id {
+//                                        Task {
+//                                            await viewModel.loadMoreMessages()
+//                                        }
+//                                    }
+//                                }
                             }
                         }
                     }

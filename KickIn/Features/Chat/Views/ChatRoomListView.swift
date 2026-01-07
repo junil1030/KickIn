@@ -44,6 +44,7 @@ struct ChatRoomListView: View {
                         ForEach(viewModel.chatRooms) { chatRoom in
                             NavigationLink(destination: ChatDetailView(
                                 roomId: chatRoom.id,
+                                opponentUserId: chatRoom.otherParticipant.userId,
                                 otherParticipantName: chatRoom.otherParticipant.nickname
                             )) {
                                 ChatRoomCell(chatRoom: chatRoom)
