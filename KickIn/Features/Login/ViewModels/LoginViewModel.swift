@@ -18,6 +18,11 @@ import UIKit
 final class LoginViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var toastMessage: String?
+    @Published var email = ""
+    @Published var password = ""
+    @Published var emailErrorMessage: String?
+    @Published var passwordErrorMessage: String?
     
     private let networkService: NetworkServiceProtocol
     private let tokenStorage: TokenStorageProtocol
@@ -48,13 +53,13 @@ final class LoginViewModel: ObservableObject {
                 await MainActor.run {
                     // 사용자가 취소한 경우 에러 메시지 표시 안함
                     if error.code != .canceled {
-                        errorMessage = "Apple 로그인에 실패했습니다."
+                        toastMessage = "Apple 로그인에 실패했습니다."
                     }
                     isLoading = false
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Apple 로그인에 실패했습니다."
+                    toastMessage = "Apple 로그인에 실패했습니다."
                     isLoading = false
                 }
             }
@@ -89,7 +94,7 @@ final class LoginViewModel: ObservableObject {
                 await performKakaoLogin(oauthToken: oauthToken)
             } catch {
                 await MainActor.run {
-                    errorMessage = "카카오 로그인에 실패했습니다."
+                    toastMessage = "카카오 로그인에 실패했습니다."
                     isLoading = false
                 }
             }
@@ -175,13 +180,13 @@ final class LoginViewModel: ObservableObject {
         } catch let error as NetworkError {
             Logger.auth.error("NetworkError: \(error.localizedDescription)")
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                toastMessage = error.localizedDescription
                 isLoading = false
             }
         } catch {
             Logger.auth.error("Unknown error: \(error.localizedDescription)")
             await MainActor.run {
-                errorMessage = "로그인에 실패했습니다."
+                toastMessage = "로그인에 실패했습니다."
                 isLoading = false
             }
         }
@@ -211,6 +216,69 @@ final class LoginViewModel: ObservableObject {
         )
 
         await performSocialLogin(UserRouter.appleLogin(requestDTO))
+    }
+
+    // MARK: - Email Login
+
+    func handleEmailLogin() {
+        if !validateCredentials() {
+            return
+        }
+
+        Task {
+            let fcmToken = await tokenStorage.getFCMToken()
+            let requestDTO = LoginRequestDTO(
+                email: email,
+                password: password,
+                deviceToken: fcmToken
+            )
+            await performSocialLogin(UserRouter.login(requestDTO))
+        }
+    }
+
+    @discardableResult
+    private func validateCredentials() -> Bool {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedEmail.isEmpty {
+            emailErrorMessage = "이메일을 입력해주세요."
+        } else if !isEmailValid {
+            emailErrorMessage = "이메일 형식을 확인해주세요."
+        } else {
+            emailErrorMessage = nil
+        }
+
+        if trimmedPassword.isEmpty {
+            passwordErrorMessage = "비밀번호를 입력해주세요."
+        } else if !isPasswordValid {
+            passwordErrorMessage = "비밀번호는 8자 이상, 영문/숫자/특수문자(@$!%*#?&)를 포함해주세요."
+        } else {
+            passwordErrorMessage = nil
+        }
+
+        return emailErrorMessage == nil && passwordErrorMessage == nil
+    }
+}
+
+// MARK: - Validation
+
+extension LoginViewModel {
+    var isEmailValid: Bool {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let atIndex = trimmed.firstIndex(of: "@") else { return false }
+        let domainPart = trimmed[trimmed.index(after: atIndex)...]
+        return !trimmed.isEmpty && domainPart.contains(".")
+    }
+
+    var isPasswordValid: Bool {
+        let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pattern = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@$!%*#?&]).{8,}$"
+        return NSPredicate(format: "SELF MATCHES %@", pattern).evaluate(with: trimmed)
+    }
+
+    var canSubmitCredentials: Bool {
+        isEmailValid && isPasswordValid
     }
 }
 
