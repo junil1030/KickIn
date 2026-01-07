@@ -6,3 +6,11 @@
 //
 
 import Foundation
+
+struct PaymentOrderInfo: Identifiable {
+    let id = UUID()
+    let title: String
+    let buyerName: String
+    let orderCode: String
+    let amount: Int
+}

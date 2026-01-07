@@ -9,10 +9,12 @@ import UIKit
 import OSLog
 import Firebase
 import FirebaseMessaging
+import iamport_ios
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
+    private let paymentViewModel = PaymentViewModel()
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         
@@ -38,8 +40,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // 메시지 대리자 설정
         Messaging.messaging().delegate = self
+
+        paymentViewModel.retryPendingValidations()
         
         return true
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        paymentViewModel.retryPendingValidations()
     }
 }
 
@@ -59,5 +67,13 @@ extension AppDelegate: MessagingDelegate {
         Task {
             await tokenStorage.setFCMToken(fcmToken)
         }
+    }
+}
+
+// MARK: - PG
+extension AppDelegate {
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+        Iamport.shared.receivedURL(url)
+        return true
     }
 }
