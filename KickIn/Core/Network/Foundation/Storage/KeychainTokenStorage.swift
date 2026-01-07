@@ -11,9 +11,11 @@ import Security
 actor KeychainTokenStorage: TokenStorageProtocol {
     private let accessTokenKey = "com.KickIn.accessToken"
     private let refreshTokenKey = "com.KickIn.refreshToken"
+    private let fcmTokenKey = "com.KickIn.fcmToken"
     private let userIdKey = "com.KickIn.userId"
     private let service = "com.KickIn.app"
 
+    // MARK: - Get
     func getAccessToken() async -> String? {
         return await getToken(for: accessTokenKey)
     }
@@ -21,11 +23,16 @@ actor KeychainTokenStorage: TokenStorageProtocol {
     func getRefreshToken() async -> String? {
         return await getToken(for: refreshTokenKey)
     }
+    
+    func getFCMToken() async -> String? {
+        return await getToken(for: fcmTokenKey)
+    }
 
     func getUserId() async -> String? {
         return await getToken(for: userIdKey)
     }
 
+    // MARK: - Set
     func setAccessToken(_ token: String) async {
         await setToken(token, for: accessTokenKey)
     }
@@ -33,15 +40,21 @@ actor KeychainTokenStorage: TokenStorageProtocol {
     func setRefreshToken(_ token: String) async {
         await setToken(token, for: refreshTokenKey)
     }
+    
+    func setFCMToken(_ token: String) async {
+        await setToken(token, for: fcmTokenKey)
+    }
 
     func setUserId(_ userId: String) async {
         await setToken(userId, for: userIdKey)
     }
 
+    // MARK: - Clear
     func clearTokens() async {
         await deleteToken(for: accessTokenKey)
         await deleteToken(for: refreshTokenKey)
         await deleteToken(for: userIdKey)
+        await deleteToken(for: fcmTokenKey)
     }
 
     // MARK: - Private Keychain Operations
