@@ -14,6 +14,7 @@ final class EstateDetailViewModel: ObservableObject {
     @Published var similarEstates: [SimilarEstateUIModel] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var paymentOrder: PaymentOrderInfo?
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
     private let estateId: String
@@ -53,6 +54,60 @@ final class EstateDetailViewModel: ObservableObject {
             Logger.network.error("❌ Failed to update like status: \(error.localizedDescription)")
         } catch {
             Logger.network.error("❌ Unknown error updating like status: \(error.localizedDescription)")
+        }
+    }
+
+    func createOrder() async {
+        guard let reservationPrice = estate?.reservationPrice else {
+            await MainActor.run {
+                self.errorMessage = "예약금 정보를 불러올 수 없습니다."
+            }
+            return
+        }
+
+        await MainActor.run {
+            errorMessage = nil
+        }
+
+        do {
+            let response: CreateOrderResponseDTO = try await networkService.request(
+                OrderRouter.createOrder(
+                    CreateOrderRequestDTO(
+                        estateId: estateId,
+                        totalPrice: reservationPrice
+                    )
+                )
+            )
+            
+            let profile: UserProfileResponseDTO = try await networkService.request(UserRouter.myProfile)
+
+            let orderCode = response.orderCode ?? "kickin_\(Int(Date().timeIntervalSince1970))"
+            let amount = response.totalPrice ?? reservationPrice
+
+            await MainActor.run {
+                guard let estate = estate else {
+                    self.errorMessage = "매물 정보를 불러올 수 없습니다."
+                    return
+                }
+                self.paymentOrder = PaymentOrderInfo(
+                    title: estate.title ?? "알 수 없는 매물",
+                    buyerName: profile.email ?? "알 수 없는 이메일",
+                    orderCode: orderCode,
+                    amount: amount
+                )
+            }
+
+            Logger.network.info("✅ Created order for estate ID: \(self.estateId)")
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to create order: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+            }
+        } catch {
+            Logger.network.error("❌ Unknown error creating order: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = "예약 요청에 실패했습니다."
+            }
         }
     }
 }

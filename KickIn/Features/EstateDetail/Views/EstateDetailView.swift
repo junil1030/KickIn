@@ -11,6 +11,9 @@ struct EstateDetailView: View {
     @StateObject private var viewModel: EstateDetailViewModel
     private let estateId: String
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var showPaymentSuccessAlert = false
+    @State private var paymentFailureMessage: String?
+    @State private var showPaymentCancelledAlert = false
 
     init(estateId: String) {
         self.estateId = estateId
@@ -36,6 +39,37 @@ struct EstateDetailView: View {
         .task {
             await viewModel.loadData()
         }
+        .sheet(item: $viewModel.paymentOrder) { order in
+            PaymentView(
+                paymentOrderInfo: order,
+                onValidationSuccess: {
+                    viewModel.paymentOrder = nil
+                    showPaymentSuccessAlert = true
+                },
+                onPaymentFailure: { message in
+                    viewModel.paymentOrder = nil
+                    paymentFailureMessage = message
+                },
+                onPaymentCancelled: {
+                    viewModel.paymentOrder = nil
+                    showPaymentCancelledAlert = true
+                }
+            )
+        }
+        .alert("결제가 완료되었습니다.", isPresented: $showPaymentSuccessAlert) {
+            Button("확인", role: .cancel) {}
+        }
+        .alert("결제에 실패했습니다.", isPresented: Binding(
+            get: { paymentFailureMessage != nil },
+            set: { if !$0 { paymentFailureMessage = nil } }
+        )) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(paymentFailureMessage ?? "")
+        }
+        .alert("결제가 취소되었습니다.", isPresented: $showPaymentCancelledAlert) {
+            Button("확인", role: .cancel) {}
+        }
     }
 
     private var isRegularWidth: Bool {
@@ -52,6 +86,10 @@ struct EstateDetailView: View {
 
     private var isLiked: Bool {
         viewModel.estate?.isLiked ?? false
+    }
+
+    private var isReserved: Bool {
+        viewModel.estate?.isReserved ?? false
     }
 
     private func detailScrollView() -> some View {
@@ -123,17 +161,20 @@ struct EstateDetailView: View {
             .buttonStyle(.plain)
 
             Button {
-                // TODO: reserve action
+                Task {
+                    await viewModel.createOrder()
+                }
             } label: {
                 Text("예약하기")
                     .font(.title1(.pretendardBold))
                     .foregroundStyle(Color.gray0)
                     .frame(minWidth: 120, minHeight: 48)
                     .padding(.horizontal, 8)
-                    .background(Color.deepCream)
+                    .background(isReserved ? Color.gray45 : Color.deepCream)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
+            .disabled(isReserved)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -159,16 +200,19 @@ struct EstateDetailView: View {
             .buttonStyle(.plain)
 
             Button {
-                // TODO: reserve action
+                Task {
+                    await viewModel.createOrder()
+                }
             } label: {
                 Text("예약하기")
                     .font(.title1(.pretendardBold))
                     .foregroundStyle(Color.gray0)
                     .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(Color.deepCream)
+                    .background(isReserved ? Color.gray45 : Color.deepCream)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
+            .disabled(isReserved)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
