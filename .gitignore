@@ -140,9 +140,10 @@ xcuserdata
 ### Secret ###
 *.xcconfig
 
-### Claude Code ###
+### AI Files ###
 .claude/
 CLAUDE.md
+AGENTS.md
 
 ### Assets ###
 **/Assets.xcassets/
