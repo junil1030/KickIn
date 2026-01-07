@@ -102,6 +102,38 @@ extension EstateDetailResponseDTO {
     }
 }
 
+extension EstateDetailUIModel {
+    func updating(isLiked: Bool?) -> EstateDetailUIModel {
+        return EstateDetailUIModel(
+            estateId: estateId,
+            category: category,
+            title: title,
+            introduction: introduction,
+            reservationPrice: reservationPrice,
+            thumbnails: thumbnails,
+            description: description,
+            deposit: deposit,
+            monthlyRent: monthlyRent,
+            builtYear: builtYear,
+            maintenanceFee: maintenanceFee,
+            area: area,
+            parkingCount: parkingCount,
+            floors: floors,
+            options: options,
+            geolocation: geolocation,
+            creator: creator,
+            isLiked: isLiked,
+            isReserved: isReserved,
+            likeCount: likeCount,
+            isSafeEstate: isSafeEstate,
+            isRecommended: isRecommended,
+            comments: comments,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+}
+
 extension EstateOptionsDTO {
     func toUIModel() -> EstateOptionsUIModel {
         return EstateOptionsUIModel(

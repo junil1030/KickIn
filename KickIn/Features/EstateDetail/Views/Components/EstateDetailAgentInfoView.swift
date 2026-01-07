@@ -60,7 +60,7 @@ struct EstateDetailAgentInfoView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 60)
+        .padding(.bottom, 100)
     }
 }
 

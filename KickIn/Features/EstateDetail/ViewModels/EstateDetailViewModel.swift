@@ -29,6 +29,32 @@ final class EstateDetailViewModel: ObservableObject {
         await loadDetail()
         await loadSimilarEstates()
     }
+
+    func toggleLike() async {
+        let currentLikeStatus = estate?.isLiked ?? false
+        let nextLikeStatus = !currentLikeStatus
+
+        do {
+            let response: EstateLikeResponseDTO = try await networkService.request(
+                EstateRouter.likeEstate(
+                    estateId: estateId,
+                    EstateLikeRequestDTO(likeStatus: nextLikeStatus)
+                )
+            )
+
+            let updatedStatus = response.likeStatus ?? nextLikeStatus
+
+            await MainActor.run {
+                self.estate = self.estate?.updating(isLiked: updatedStatus)
+            }
+
+            Logger.network.info("✅ Updated estate like status: \(updatedStatus)")
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to update like status: \(error.localizedDescription)")
+        } catch {
+            Logger.network.error("❌ Unknown error updating like status: \(error.localizedDescription)")
+        }
+    }
 }
 
 // MARK: - Load Data
