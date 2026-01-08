@@ -9,19 +9,19 @@ import Foundation
 
 actor TokenRefreshManager {
     private var isRefreshing = false
-    private var refreshTask: Task<String, Error>?
+    private var refreshTask: Task<RefreshTokenResponseDTO, Error>?
 
     func refreshToken(
         using refreshToken: String,
-        refreshHandler: @escaping (String) async throws -> String
-    ) async throws -> String {
+        refreshHandler: @escaping (String) async throws -> RefreshTokenResponseDTO
+    ) async throws -> RefreshTokenResponseDTO {
         // If already refreshing, wait for the existing task
         if let existingTask = refreshTask {
             return try await existingTask.value
         }
 
         // Create new refresh task
-        let task = Task<String, Error> {
+        let task = Task<RefreshTokenResponseDTO, Error> {
             isRefreshing = true
             defer {
                 isRefreshing = false
