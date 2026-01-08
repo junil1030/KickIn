@@ -13,6 +13,7 @@ final class HomeViewModel: ObservableObject {
     @Published var todayEstates: [TodayEstateUIModel] = []
     @Published var hotEstates: [HotEstateUIModel] = []
     @Published var todayTopics: [TopicUIModel] = []
+    @Published var banners: [BannerUIModel] = []
     @Published var promoVideos: [VideoUIModel] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -26,6 +27,7 @@ final class HomeViewModel: ObservableObject {
         await loadTodayEstates()
         await loadHotEstates()
         await loadTopic()
+        await loadBanners()
         await loadPromoVideos()
     }
 }
@@ -96,6 +98,40 @@ extension HomeViewModel {
             Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
             await MainActor.run {
                 self.errorMessage = "Hot 매물을 불러오는데 실패했습니다."
+                self.isLoading = false
+            }
+        }
+    }
+  
+    /// Load banners
+    private func loadBanners() async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+
+        do {
+            let response: BannerResponseDTO = try await networkService.request(BannerRouter.mainBanners)
+
+            let banners = response.data?.map { $0.toUIModel() } ?? []
+
+            await MainActor.run {
+                self.banners = banners
+                self.isLoading = false
+            }
+
+            Logger.network.info("✅ Loaded \(banners.count) banners")
+
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to load banners: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
+            }
+        } catch {
+            Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = "배너를 불러오는데 실패했습니다."
                 self.isLoading = false
             }
         }

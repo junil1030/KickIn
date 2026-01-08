@@ -36,7 +36,10 @@ struct HomeView: View {
                 )
 
                 // 오늘의 Topic
-                TopicSection(topics: viewModel.todayTopics)
+                TopicSection(
+                    topics: viewModel.todayTopics,
+                    banners: viewModel.banners
+                )
             }
             .frame(maxWidth: .infinity)
         }

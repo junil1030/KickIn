@@ -6,12 +6,15 @@
 //
 
 import SwiftUI
+import OSLog
 
 struct TopicSection: View {
 
     let topics: [TopicUIModel]
+    let banners: [BannerUIModel]
     @State private var selectedURL: URL?
     @State private var showSafari = false
+    @State private var selectedBanner: BannerUIModel?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,8 +35,15 @@ struct TopicSection: View {
                     Divider()
 
                     if (index + 1) % 3 == 0 && index + 1 < topics.count {
-                        AdCell()
-                            .background(Color.gray0)
+                        let bannerIndex = (index + 1) / 3 - 1
+                        let banner = banners.indices.contains(bannerIndex) ? banners[bannerIndex] : nil
+
+                        AdCell(imageURL: banner?.imageUrl?.thumbnailURL) {
+                            if let banner, banner.webViewURL != nil {
+                                selectedBanner = banner
+                            }
+                        }
+                        .background(Color.gray0)
 
                         Divider()
                     }
@@ -45,11 +55,19 @@ struct TopicSection: View {
                 SafariView(url: url)
             }
         }
+        .sheet(item: $selectedBanner) { banner in
+            if let url = banner.webViewURL {
+                BannerWebView(url: url) { count in
+                    Logger.network.info("출석체크 횟수: \(count ?? 0)")
+                }
+            }
+        }
     }
 }
 
 #Preview {
-    TopicSection(topics: [
+    TopicSection(
+        topics: [
         TopicUIModel(
             title: "부동산 시장 동향",
             content: "2024년 주요 지역 부동산 시장 분석",
@@ -74,5 +92,7 @@ struct TopicSection: View {
             date: "2024.12.19",
             link: "https://example.com"
         )
-    ])
+    ],
+        banners: []
+    )
 }
