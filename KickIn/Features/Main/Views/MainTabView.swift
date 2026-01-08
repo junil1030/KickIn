@@ -8,9 +8,9 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @State private var selectedTab: Tab = .home
+    @State private var selectedTab: TabItem = .home
 
-    enum Tab {
+    enum TabItem {
         case home
         case interest
         case chat
@@ -42,7 +42,7 @@ struct MainTabView: View {
                         .renderingMode(.template)
                 }
             }
-            .tag(Tab.home)
+            .tag(TabItem.home)
 
             NavigationStack {
                 InterestView()
@@ -55,7 +55,7 @@ struct MainTabView: View {
                         .renderingMode(.template)
                 }
             }
-            .tag(Tab.interest)
+            .tag(TabItem.interest)
 
             NavigationStack {
                 ChatRoomListView()
@@ -67,7 +67,7 @@ struct MainTabView: View {
                     Image(systemName: selectedTab == .chat ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
                 }
             }
-            .tag(Tab.chat)
+            .tag(TabItem.chat)
 
             NavigationStack {
                 ProfileView()
@@ -80,7 +80,7 @@ struct MainTabView: View {
                         .renderingMode(.template)
                 }
             }
-            .tag(Tab.profile)
+            .tag(TabItem.profile)
             }
             .tint(Color.gray90)
             .environment(\.screenSize, screenSize)
