@@ -13,10 +13,12 @@ final class HomeViewModel: ObservableObject {
     @Published var todayEstates: [TodayEstateUIModel] = []
     @Published var hotEstates: [HotEstateUIModel] = []
     @Published var todayTopics: [TopicUIModel] = []
+    @Published var promoVideos: [VideoUIModel] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
+    private var nextVideoCursor: String?
 
     // MARK: - Public Methods
 
@@ -24,6 +26,7 @@ final class HomeViewModel: ObservableObject {
         await loadTodayEstates()
         await loadHotEstates()
         await loadTopic()
+        await loadPromoVideos()
     }
 }
 
@@ -127,6 +130,41 @@ extension HomeViewModel {
             Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
             await MainActor.run {
                 self.errorMessage = "오늘의 토픽을 불러오는데 실패했습니다."
+                self.isLoading = false
+            }
+        }
+    }
+
+    /// Load promo videos
+    private func loadPromoVideos() async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+
+        do {
+            let response: VideoListResponseDTO = try await networkService.request(
+                VideoRouter.getVideos(next: nil, limit: 10)
+            )
+            let videos = response.data?.map { $0.toUIModel() } ?? []
+
+            await MainActor.run {
+                self.promoVideos = videos
+                self.nextVideoCursor = response.nextCursor
+                self.isLoading = false
+            }
+
+            Logger.network.info("✅ Loaded \(videos.count) promo videos")
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to load promo videos: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
+            }
+        } catch {
+            Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = "홍보 영상을 불러오는데 실패했습니다."
                 self.isLoading = false
             }
         }
