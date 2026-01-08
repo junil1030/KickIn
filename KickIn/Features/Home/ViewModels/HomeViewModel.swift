@@ -14,10 +14,12 @@ final class HomeViewModel: ObservableObject {
     @Published var hotEstates: [HotEstateUIModel] = []
     @Published var todayTopics: [TopicUIModel] = []
     @Published var banners: [BannerUIModel] = []
+    @Published var promoVideos: [VideoUIModel] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
+    private var nextVideoCursor: String?
 
     // MARK: - Public Methods
 
@@ -26,6 +28,7 @@ final class HomeViewModel: ObservableObject {
         await loadHotEstates()
         await loadTopic()
         await loadBanners()
+        await loadPromoVideos()
     }
 }
 
@@ -99,6 +102,40 @@ extension HomeViewModel {
             }
         }
     }
+  
+    /// Load banners
+    private func loadBanners() async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+
+        do {
+            let response: BannerResponseDTO = try await networkService.request(BannerRouter.mainBanners)
+
+            let banners = response.data?.map { $0.toUIModel() } ?? []
+
+            await MainActor.run {
+                self.banners = banners
+                self.isLoading = false
+            }
+
+            Logger.network.info("✅ Loaded \(banners.count) banners")
+
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Failed to load banners: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
+            }
+        } catch {
+            Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = "배너를 불러오는데 실패했습니다."
+                self.isLoading = false
+            }
+        }
+    }
     
     /// Load today topic
     private func loadTopic() async {
@@ -134,27 +171,28 @@ extension HomeViewModel {
         }
     }
 
-    /// Load banners
-    private func loadBanners() async {
+    /// Load promo videos
+    private func loadPromoVideos() async {
         await MainActor.run {
             isLoading = true
             errorMessage = nil
         }
 
         do {
-            let response: BannerResponseDTO = try await networkService.request(BannerRouter.mainBanners)
-
-            let banners = response.data?.map { $0.toUIModel() } ?? []
+            let response: VideoListResponseDTO = try await networkService.request(
+                VideoRouter.getVideos(next: nil, limit: 10)
+            )
+            let videos = response.data?.map { $0.toUIModel() } ?? []
 
             await MainActor.run {
-                self.banners = banners
+                self.promoVideos = videos
+                self.nextVideoCursor = response.nextCursor
                 self.isLoading = false
             }
 
-            Logger.network.info("✅ Loaded \(banners.count) banners")
-
+            Logger.network.info("✅ Loaded \(videos.count) promo videos")
         } catch let error as NetworkError {
-            Logger.network.error("❌ Failed to load banners: \(error.localizedDescription)")
+            Logger.network.error("❌ Failed to load promo videos: \(error.localizedDescription)")
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
                 self.isLoading = false
@@ -162,7 +200,7 @@ extension HomeViewModel {
         } catch {
             Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
             await MainActor.run {
-                self.errorMessage = "배너를 불러오는데 실패했습니다."
+                self.errorMessage = "홍보 영상을 불러오는데 실패했습니다."
                 self.isLoading = false
             }
         }

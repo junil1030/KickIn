@@ -24,6 +24,11 @@ struct HomeView: View {
 
                 // 최근 검색 매물 섹션
                 RecentEstateSection()
+                
+                // 매물 홍보 영상 섹션
+                VideoPromoSection(
+                    videos: viewModel.promoVideos
+                )
 
                 // HOT 매물 섹션
                 HotEstateSection(
