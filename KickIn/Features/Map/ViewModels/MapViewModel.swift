@@ -1,0 +1,259 @@
+//
+//  MapViewModel.swift
+//  KickIn
+//
+//  Created by 서준일 on 01/09/26.
+//
+
+import Foundation
+import Combine
+import CoreLocation
+import OSLog
+
+final class MapViewModel: ObservableObject {
+    // MARK: - Published Properties
+    @Published var mapPoints: [MapPoint] = []
+    @Published var quadPoints: [QuadPoint] = []
+    @Published var clusters: [ClusterCenter] = []
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+
+    // MARK: - Private Properties
+    private let networkService = NetworkServiceFactory.shared.makeNetworkService()
+    private let clusteringService: ClusteringServiceProtocol
+    private var cancellables = Set<AnyCancellable>()
+
+    // Combine subject for camera changes (user-initiated only)
+    private let cameraChangeSubject = PassthroughSubject<CameraChangeEvent, Never>()
+
+    // MARK: - Initialization
+    init(clusteringService: ClusteringServiceProtocol = ClusteringService()) {
+        self.clusteringService = clusteringService
+        setupDebounce()
+    }
+
+    // MARK: - Setup
+    private func setupDebounce() {
+        cameraChangeSubject
+            .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
+            .sink { [weak self] event in
+                Task { [weak self] in
+                    await self?.fetchNearbyEstates(event: event)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Public Methods
+
+    /// Called from NaverMapView when camera changes (only user-initiated)
+    func handleCameraChange(center: CLLocationCoordinate2D,
+                           southWest: CLLocationCoordinate2D,
+                           northEast: CLLocationCoordinate2D,
+                           reason: Int) {
+        // Only process user-initiated camera changes (byReason == -1)
+        guard reason == -1 else {
+            Logger.ui.debug("🗺️ Camera change ignored (programmatic): reason=\(reason)")
+            return
+        }
+
+        // Calculate radius using Haversine distance
+        let maxDistance = calculateRadius(from: southWest, to: northEast)
+
+        Logger.ui.info("""
+        🗺️ Camera change detected:
+           Center: (\(center.latitude), \(center.longitude))
+           SW: (\(southWest.latitude), \(southWest.longitude))
+           NE: (\(northEast.latitude), \(northEast.longitude))
+           Max Distance: \(maxDistance)m
+           Reason: \(reason)
+        """)
+
+        let event = CameraChangeEvent(
+            center: center,
+            maxDistance: maxDistance
+        )
+
+        // Send to debounce subject
+        cameraChangeSubject.send(event)
+    }
+
+    // MARK: - Private Methods
+
+    /// Fetch nearby estates from API
+    private func fetchNearbyEstates(event: CameraChangeEvent) async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+
+        do {
+            let response: EstateGeolocationResponseDTO = try await networkService.request(
+                EstateRouter.geolocation(
+                    category: nil,
+                    longitude: String(event.center.longitude),
+                    latitude: String(event.center.latitude),
+                    maxDistance: event.maxDistance
+                )
+            )
+
+            let estates = response.data ?? []
+
+            // Convert DTOs to MapPoint and QuadPoint
+            let mapPoints = estates.compactMap { $0.toMapPoint() }
+            let quadPoints = estates.compactMap { $0.toQuadPoint() }
+
+            // Perform clustering
+            let clusterResult = await performClustering(points: quadPoints)
+
+            await MainActor.run {
+                self.mapPoints = mapPoints
+                self.quadPoints = quadPoints
+                self.clusters = clusterResult.clusterCenters()
+                self.isLoading = false
+            }
+
+            Logger.network.info("""
+            ✅ Geolocation API Success:
+               Center: (\(event.center.latitude), \(event.center.longitude))
+               Max Distance: \(event.maxDistance)m
+               Results: \(estates.count) estates
+               MapPoints: \(mapPoints.count), QuadPoints: \(quadPoints.count)
+               Clusters: \(clusterResult.clusterCount), Noise: \(clusterResult.noise.count)
+            """)
+
+            // Log individual results for debugging
+            if !estates.isEmpty {
+                Logger.network.debug("📍 Estate details:")
+                for estate in estates.prefix(5) {
+                    if let estateId = estate.estateId,
+                       let title = estate.title,
+                       let distance = estate.distance {
+                        Logger.network.debug("  - \(estateId): \(title) (\(Int(distance))m away)")
+                    }
+                }
+                if estates.count > 5 {
+                    Logger.network.debug("  ... and \(estates.count - 5) more")
+                }
+            }
+
+        } catch let error as NetworkError {
+            Logger.network.error("❌ Geolocation API Failed: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
+            }
+        } catch {
+            Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = "주변 매물을 불러오는데 실패했습니다."
+                self.isLoading = false
+            }
+        }
+    }
+
+    /// Calculate radius (half the diagonal distance between SW and NE corners)
+    /// Uses Haversine formula for accurate distance on Earth's surface
+    private func calculateRadius(from southWest: CLLocationCoordinate2D,
+                                to northEast: CLLocationCoordinate2D) -> Int {
+        let distance = haversineDistance(from: southWest, to: northEast)
+        let radius = Int(distance / 2.0)
+        return radius
+    }
+
+    /// Haversine formula to calculate distance between two coordinates in meters
+    private func haversineDistance(from: CLLocationCoordinate2D,
+                                   to: CLLocationCoordinate2D) -> Double {
+        let earthRadius = 6371000.0 // meters
+
+        let lat1 = from.latitude * .pi / 180
+        let lat2 = to.latitude * .pi / 180
+        let deltaLat = (to.latitude - from.latitude) * .pi / 180
+        let deltaLon = (to.longitude - from.longitude) * .pi / 180
+
+        let a = sin(deltaLat / 2) * sin(deltaLat / 2) +
+                cos(lat1) * cos(lat2) *
+                sin(deltaLon / 2) * sin(deltaLon / 2)
+
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+        return earthRadius * c
+    }
+
+    // MARK: - Clustering
+
+    /// 클러스터링 수행 (적응형 epsilon 사용)
+    /// - Parameter points: 클러스터링할 QuadPoint 배열
+    /// - Returns: ClusterResult
+    private func performClustering(points: [QuadPoint]) async -> ClusterResult {
+        // 점이 너무 적으면 클러스터링 건너뛰기
+        guard points.count > 10 else {
+            // 모든 점을 개별 클러스터로 반환
+            let individualClusters = points.map { [$0] }
+            return ClusterResult(clusters: individualClusters, noise: [])
+        }
+
+        // 점 개수에 따른 적응형 epsilon
+        let epsilon = calculateAdaptiveEpsilon(pointCount: points.count)
+
+        // ClusteringService를 통해 클러스터링
+        return await clusteringService.cluster(
+            points: points,
+            epsilon: epsilon,
+            minPoints: SpatialConstants.defaultMinPoints
+        )
+    }
+
+    /// 점 개수에 따른 적응형 epsilon 계산
+    /// - Parameter pointCount: 점 개수
+    /// - Returns: 적절한 epsilon 값 (미터)
+    private func calculateAdaptiveEpsilon(pointCount: Int) -> Double {
+        // 점이 많을수록 작은 epsilon 사용 (세밀한 클러스터링)
+        return SpatialConstants.epsilon(forPointCount: pointCount)
+    }
+}
+
+// MARK: - Camera Change Event
+struct CameraChangeEvent {
+    let center: CLLocationCoordinate2D
+    let maxDistance: Int
+}
+
+// MARK: - DTO to Model Conversion
+extension EstateLikeItemDTO {
+    /// Convert DTO to MapPoint for map display
+    func toMapPoint() -> MapPoint? {
+        guard let longitude = geolocation?.longitude,
+              let latitude = geolocation?.latitude,
+              let title = title,
+              let category = category else {
+            return nil
+        }
+
+        return MapPoint(
+            title: title,
+            category: category,
+            deposit: deposit ?? 0,
+            monthly_rent: monthlyRent ?? 0,
+            area: area ?? 0,
+            floors: floors ?? 0,
+            imageURL: thumbnails?.first ?? "",
+            longitude: longitude,
+            latitude: latitude
+        )
+    }
+
+    /// Convert DTO to QuadPoint for clustering
+    func toQuadPoint() -> QuadPoint? {
+        guard let estateId = estateId,
+              let longitude = geolocation?.longitude,
+              let latitude = geolocation?.latitude else {
+            return nil
+        }
+
+        return QuadPoint(
+            id: estateId,
+            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        )
+    }
+}

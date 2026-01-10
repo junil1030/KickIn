@@ -21,7 +21,9 @@ struct NaverMapView: UIViewRepresentable {
         return mapView
     }
 
-    func updateUIView(_ uiView: NMFNaverMapView, context: Context) { }
+    func updateUIView(_ uiView: NMFNaverMapView, context: Context) {
+        context.coordinator.updateClusters(viewModel.clusters, on: uiView.mapView)
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(viewModel: viewModel)
@@ -30,9 +32,22 @@ struct NaverMapView: UIViewRepresentable {
     // MARK: - Coordinator
     final class Coordinator: NSObject, NMFMapViewCameraDelegate {
         private let viewModel: MapViewModel
+        private var clusterMarkers: [NMFMarker] = []
 
         init(viewModel: MapViewModel) {
             self.viewModel = viewModel
+        }
+
+        func updateClusters(_ clusters: [ClusterCenter], on mapView: NMFMapView) {
+            clusterMarkers.forEach { $0.mapView = nil }
+            clusterMarkers = clusters.map { cluster in
+                let marker = NMFMarker()
+                marker.position = NMGLatLng(lat: cluster.coordinate.latitude, lng: cluster.coordinate.longitude)
+                marker.captionText = "\(cluster.pointCount)"
+                marker.captionMinZoom = 0
+                marker.mapView = mapView
+                return marker
+            }
         }
 
         // Called when camera movement ends
