@@ -17,6 +17,9 @@ final class VideoDetailViewModel: ObservableObject {
     @Published var selectedSubtitle: VideoStreamSubtitleDTO?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var playerState = VideoPlayerState()
+    @Published var currentTime: TimeInterval = 0
+    @Published var duration: TimeInterval = 0
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
@@ -148,6 +151,67 @@ final class VideoDetailViewModel: ObservableObject {
             }
             Logger.network.error("❌ Failed to load subtitle: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Player Controls
+
+    func seek(by offset: TimeInterval) {
+        guard let player = player else {
+            Logger.network.debug("⚠️ ViewModel: No player to seek")
+            return
+        }
+        let currentTime = player.currentTime()
+        let newTime = CMTimeAdd(currentTime, CMTime(seconds: offset, preferredTimescale: 600))
+        Logger.network.debug("🎯 ViewModel: Seeking by \(offset)s - from \(currentTime.seconds)s to \(newTime.seconds)s")
+        player.seek(to: newTime)
+    }
+
+    func seek(to time: TimeInterval) {
+        guard let player = player else {
+            Logger.network.debug("⚠️ ViewModel: No player to seek")
+            return
+        }
+        Logger.network.debug("🎯 ViewModel: Seeking to \(time)s")
+        player.seek(to: CMTime(seconds: time, preferredTimescale: 600))
+    }
+
+    func setPlaybackSpeed(_ rate: Float) {
+        guard let player = player else {
+            Logger.network.debug("⚠️ ViewModel: No player to set speed")
+            return
+        }
+        Logger.network.debug("⚡️ ViewModel: Setting playback speed to \(rate)x")
+        player.rate = rate
+    }
+
+    func switchQuality(to quality: VideoStreamQualityDTO) async {
+        guard let qualityUrl = quality.url,
+              let url = resolvedStreamURL(from: qualityUrl) else { return }
+
+        // 현재 재생 위치와 상태 저장
+        let savedTime = player?.currentTime().seconds ?? 0
+        let wasPlaying = playerState.isPlaying
+
+        // 새 URL로 플레이어 재설정
+        await setPlayer(with: url)
+
+        // 이전 위치로 seek
+        await MainActor.run {
+            player?.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
+            if wasPlaying {
+                player?.play()
+            }
+            playerState.selectedQuality = quality
+            playerState.showQualityMenu = false
+        }
+    }
+
+    func toggleFullscreen() {
+        playerState.isFullscreen.toggle()
+    }
+
+    func toggleSubtitleVisibility() {
+        playerState.isSubtitleVisible.toggle()
     }
 
     private func fetchSubtitleText(from url: URL) async throws -> String {
