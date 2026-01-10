@@ -15,6 +15,8 @@ struct VideoDetailView: View {
     @StateObject private var viewModel: VideoDetailViewModel
     @State private var timeObserver: Any?
     @State private var currentSubtitle: String = ""
+    @State private var isPlaying = true
+    @State private var currentTime: TimeInterval = 0
 
     private let video: VideoUIModel
 
@@ -30,6 +32,18 @@ struct VideoDetailView: View {
 
                 titleSection
 
+                // 자막 리스트
+                if !viewModel.subtitleCues.isEmpty {
+                    SubtitleListView(
+                        subtitleCues: viewModel.subtitleCues,
+                        currentTime: currentTime,
+                        onSubtitleTap: { cue in
+                            viewModel.seek(to: cue.startTime)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                }
+
                 subtitleSection
 
                 if let errorMessage = viewModel.errorMessage {
@@ -44,6 +58,14 @@ struct VideoDetailView: View {
         }
         .defaultBackground()
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $viewModel.playerState.isFullscreen) {
+            VideoPlayerFullscreenView(
+                viewModel: viewModel,
+                isFullscreen: $viewModel.playerState.isFullscreen,
+                isPlaying: $isPlaying,
+                currentSubtitle: $currentSubtitle
+            )
+        }
         .task {
             await viewModel.loadStream()
         }
@@ -67,24 +89,78 @@ struct VideoDetailView: View {
     private var playerSection: some View {
         ZStack {
             if let player = viewModel.player {
-                VideoPlayerContainerRepresentable(player: player)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(alignment: .bottom) {
-                        if !currentSubtitle.isEmpty {
-                            Text(currentSubtitle)
-                                .font(.caption1(.pretendardMedium))
-                                .foregroundStyle(Color.gray0)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .padding(.horizontal, 24)
-                                .padding(.bottom, 12)
+                GeometryReader { geometry in
+                    ZStack {
+                        VideoPlayerContainerRepresentable(player: player)
+                            .aspectRatio(16 / 9, contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                        VideoPlayerGestureView(
+                            geometry: geometry,
+                            seekFeedback: $viewModel.playerState.seekFeedback,
+                            onSeekTap: handleSeekTap,
+                            onSeekEnd: applySeekOffset,
+                            onLongPressStart: startFastPlayback,
+                            onLongPressEnd: endFastPlayback,
+                            onCenterTap: togglePlayback
+                        )
+
+                        VideoPlayerOverlayView(
+                            playerState: $viewModel.playerState,
+                            qualities: viewModel.streamInfo?.qualities ?? [],
+                            onPlayPauseTap: togglePlayback,
+                            onFullscreenTap: {
+                                viewModel.toggleFullscreen()
+                            },
+                            onCaptionTap: {
+                                viewModel.toggleSubtitleVisibility()
+                            },
+                            onQualitySelect: { quality in
+                                Task {
+                                    await viewModel.switchQuality(to: quality)
+                                }
+                            }
+                        )
+
+                        // 시크 피드백 표시
+                        if let feedback = viewModel.playerState.seekFeedback {
+                            SeekFeedbackView(feedback: feedback)
+                        }
+
+                        // 2배속 인디케이터
+                        if viewModel.playerState.isLongPressing {
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    SpeedIndicatorView()
+                                        .padding(.trailing, 16)
+                                        .padding(.top, 16)
+                                }
+                                Spacer()
+                            }
+                        }
+
+                        // 자막 오버레이
+                        VStack {
+                            Spacer()
+                            if viewModel.playerState.isSubtitleVisible && !currentSubtitle.isEmpty {
+                                Text(currentSubtitle)
+                                    .font(.caption1(.pretendardMedium))
+                                    .foregroundStyle(Color.gray0)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .padding(.horizontal, 24)
+                                    .padding(.bottom, 12)
+                            }
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .padding(.horizontal, 16)
             } else {
                 CachedAsyncImage(
                     url: getThumbnailURL(from: video.thumbnailUrl),
@@ -192,6 +268,9 @@ struct VideoDetailView: View {
         Logger.network.debug("🎬 Stream URL: \(url.absoluteString)")
         await viewModel.setPlayer(with: url)
         await MainActor.run {
+            isPlaying = true
+        }
+        await MainActor.run {
             startSubtitleObserverIfNeeded()
         }
     }
@@ -211,6 +290,7 @@ struct VideoDetailView: View {
         let interval = CMTime(seconds: 0.2, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
             currentSubtitle = subtitleText(at: time.seconds)
+            currentTime = time.seconds
         }
     }
 
@@ -233,6 +313,48 @@ struct VideoDetailView: View {
             }
         }
         return ""
+    }
+
+    private func togglePlayback() {
+        guard let player = viewModel.player else { return }
+        Logger.network.debug("▶️ VideoDetailView: Toggle playback - isPlaying: \(isPlaying)")
+        if isPlaying {
+            player.pause()
+        } else {
+            player.play()
+        }
+        isPlaying.toggle()
+        viewModel.playerState.isPlaying = isPlaying
+    }
+
+    // MARK: - Gesture Handlers
+
+    private func handleSeekTap(_ direction: SeekDirection) {
+        // 누적된 시크 값은 VideoPlayerGestureView에서 관리
+        // 여기서는 별도 처리 불필요
+        Logger.network.debug("🎬 VideoDetailView: handleSeekTap called")
+    }
+
+    private func applySeekOffset() {
+        guard let feedback = viewModel.playerState.seekFeedback else {
+            Logger.network.debug("⚠️ VideoDetailView: No feedback to apply")
+            return
+        }
+        let offset = TimeInterval(feedback.accumulatedSeconds) * (feedback.direction == .forward ? 1 : -1)
+        Logger.network.debug("🎬 VideoDetailView: Applying seek offset: \(offset)s")
+        viewModel.seek(by: offset)
+    }
+
+    private func startFastPlayback() {
+        Logger.network.debug("⚡️ VideoDetailView: Starting fast playback (2x)")
+        viewModel.playerState.isLongPressing = true
+        viewModel.setPlaybackSpeed(2.0)
+    }
+
+    private func endFastPlayback() {
+        Logger.network.debug("⚡️ VideoDetailView: Ending fast playback")
+        viewModel.playerState.isLongPressing = false
+        viewModel.setPlaybackSpeed(isPlaying ? 1.0 : 0.0)
     }
 
 }
