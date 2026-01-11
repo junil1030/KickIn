@@ -63,7 +63,8 @@ struct VideoDetailView: View {
                 viewModel: viewModel,
                 isFullscreen: $viewModel.playerState.isFullscreen,
                 isPlaying: $isPlaying,
-                currentSubtitle: $currentSubtitle
+                currentSubtitle: $currentSubtitle,
+                currentTime: $currentTime
             )
         }
         .task {
@@ -109,6 +110,8 @@ struct VideoDetailView: View {
                             VideoPlayerOverlayView(
                                 playerState: $viewModel.playerState,
                                 qualities: viewModel.streamInfo?.qualities ?? [],
+                                currentTime: currentTime,
+                                duration: viewModel.player?.currentItem?.duration.seconds ?? 0,
                                 onPlayPauseTap: togglePlayback,
                                 onFullscreenTap: {
                                     viewModel.toggleFullscreen()
@@ -120,6 +123,9 @@ struct VideoDetailView: View {
                                     Task {
                                         await viewModel.switchQuality(to: quality)
                                     }
+                                },
+                                onSeek: { time in
+                                    viewModel.seek(to: time)
                                 }
                             )
                         }

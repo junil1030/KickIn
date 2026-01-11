@@ -10,10 +10,13 @@ import SwiftUI
 struct VideoPlayerOverlayView: View {
     @Binding var playerState: VideoPlayerState
     let qualities: [VideoStreamQualityDTO]
+    let currentTime: TimeInterval
+    let duration: TimeInterval
     let onPlayPauseTap: () -> Void
     let onFullscreenTap: () -> Void
     let onCaptionTap: () -> Void
     let onQualitySelect: (VideoStreamQualityDTO) -> Void
+    let onSeek: (TimeInterval) -> Void
 
     var body: some View {
         ZStack {
@@ -27,14 +30,24 @@ struct VideoPlayerOverlayView: View {
 
             // 3단 레이아웃
             VStack {
-                // Top bar: 화질 버튼
+                // Top bar: CC, 화질 버튼
                 HStack {
                     Spacer()
+                    Button(action: onCaptionTap) {
+                        Image(systemName: playerState.isSubtitleVisible ? "captions.bubble.fill" : "captions.bubble")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(playerState.isSubtitleVisible ? Color.deepCoast : Color.gray0)
+                            .padding(10)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+
                     Button(action: toggleQualityMenu) {
                         Image(systemName: "gear")
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(Color.gray0)
-                            .padding(12)
+                            .padding(10)
                             .background(Color.black.opacity(0.5))
                             .clipShape(Circle())
                     }
@@ -45,12 +58,12 @@ struct VideoPlayerOverlayView: View {
 
                 Spacer()
 
-                // Center: 재생/일시정지 버튼
+                // Center: 재생/일시정지 버튼 (크게)
                 Button(action: onPlayPauseTap) {
                     Image(systemName: playerState.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 40, weight: .bold))
                         .foregroundStyle(Color.gray0)
-                        .padding(18)
+                        .padding(20)
                         .background(Color.black.opacity(0.5))
                         .clipShape(Circle())
                 }
@@ -58,32 +71,33 @@ struct VideoPlayerOverlayView: View {
 
                 Spacer()
 
-                // Bottom bar: CC 버튼, 전체화면 버튼
-                HStack {
-                    Button(action: onCaptionTap) {
-                        Image(systemName: playerState.isSubtitleVisible ? "captions.bubble.fill" : "captions.bubble")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(playerState.isSubtitleVisible ? Color.deepCoast : Color.gray0)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
+                // Bottom bar: 재생바 + 전체화면 버튼
+                VStack(spacing: 8) {
+                    // 재생바
+                    HStack(spacing: 8) {
+                        TimeTextView(time: currentTime)
 
-                    Spacer()
+                        VideoPlayerProgressView(
+                            currentTime: currentTime,
+                            duration: duration,
+                            onSeek: onSeek
+                        )
 
-                    Button(action: onFullscreenTap) {
-                        Image(systemName: playerState.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(Color.gray0)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
+                        TimeTextView(time: duration)
+
+                        Button(action: onFullscreenTap) {
+                            Image(systemName: playerState.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(Color.gray0)
+                                .padding(10)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
             }
 
             // 조건부 화질 메뉴

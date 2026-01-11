@@ -14,6 +14,7 @@ struct VideoPlayerFullscreenView: View {
     @Binding var isFullscreen: Bool
     @Binding var isPlaying: Bool
     @Binding var currentSubtitle: String
+    @Binding var currentTime: TimeInterval
 
     var body: some View {
         ZStack {
@@ -39,6 +40,8 @@ struct VideoPlayerFullscreenView: View {
                             VideoPlayerOverlayView(
                                 playerState: $viewModel.playerState,
                                 qualities: viewModel.streamInfo?.qualities ?? [],
+                                currentTime: currentTime,
+                                duration: viewModel.player?.currentItem?.duration.seconds ?? 0,
                                 onPlayPauseTap: togglePlayback,
                                 onFullscreenTap: {
                                     exitFullscreen()
@@ -50,6 +53,9 @@ struct VideoPlayerFullscreenView: View {
                                     Task {
                                         await viewModel.switchQuality(to: quality)
                                     }
+                                },
+                                onSeek: { time in
+                                    viewModel.seek(to: time)
                                 }
                             )
                         }
