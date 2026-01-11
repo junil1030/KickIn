@@ -12,6 +12,9 @@ struct SubtitleListView: View {
     let currentTime: TimeInterval
     let onSubtitleTap: (VideoSubtitleCue) -> Void
 
+    @State private var autoScrollEnabled = true
+    @State private var scrollTimer: Timer?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("자막 목록")
@@ -27,6 +30,8 @@ struct SubtitleListView: View {
                                 isActive: isCurrentSubtitle(subtitleCues[index]),
                                 onTap: {
                                     onSubtitleTap(subtitleCues[index])
+                                    // 자막 클릭 시 자동 스크롤 재활성화
+                                    autoScrollEnabled = true
                                 }
                             )
                             .id(index)
@@ -34,15 +39,37 @@ struct SubtitleListView: View {
                     }
                 }
                 .frame(maxHeight: 300)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 10)
+                        .onChanged { _ in
+                            // 사용자가 스크롤하면 자동 스크롤 비활성화
+                            autoScrollEnabled = false
+
+                            // 기존 타이머 취소
+                            scrollTimer?.invalidate()
+
+                            // 3초 후 재활성화
+                            scrollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+                                autoScrollEnabled = true
+                            }
+                        }
+                )
                 .onChange(of: currentTime) { _, _ in
-                    // 현재 자막으로 자동 스크롤
-                    if let activeIndex = activeSubtitleIndex() {
-                        withAnimation {
-                            proxy.scrollTo(activeIndex, anchor: .center)
+                    // 자동 스크롤이 활성화되어 있을 때만 실행
+                    if autoScrollEnabled {
+                        if let activeIndex = activeSubtitleIndex() {
+                            withAnimation {
+                                proxy.scrollTo(activeIndex, anchor: .center)
+                            }
                         }
                     }
                 }
             }
+        }
+        .onDisappear {
+            // 타이머 정리
+            scrollTimer?.invalidate()
+            scrollTimer = nil
         }
     }
 
