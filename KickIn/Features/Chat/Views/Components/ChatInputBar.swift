@@ -11,6 +11,7 @@ import PhotosUI
 struct ChatInputBar: View {
     @Binding var messageText: String
     @Binding var selectedImages: [UIImage]
+    @FocusState.Binding var isInputFocused: Bool
 
     let onSend: () -> Void
 
@@ -50,6 +51,7 @@ struct ChatInputBar: View {
                     .background(Color.gray30)
                     .cornerRadius(20)
                     .lineLimit(1...5)
+                    .focused($isInputFocused)
 
                 // 전송 버튼
                 Button(action: onSend) {
@@ -63,6 +65,12 @@ struct ChatInputBar: View {
             .padding(.vertical, 8)
         }
         .background(Color.white)
+        .onChange(of: selectedImages) { _, newValue in
+            // 외부에서 selectedImages가 비워지면 selectedItems도 초기화
+            if newValue.isEmpty && !selectedItems.isEmpty {
+                selectedItems.removeAll()
+            }
+        }
     }
 
     private var canSend: Bool {
@@ -109,7 +117,13 @@ struct ChatInputBar: View {
     }
 
     private func removeImage(at index: Int) {
+        guard index < selectedImages.count else { return }
+
         selectedImages.remove(at: index)
-        selectedItems.remove(at: index)
+
+        // selectedItems 배열 크기 확인 후 삭제
+        if index < selectedItems.count {
+            selectedItems.remove(at: index)
+        }
     }
 }
