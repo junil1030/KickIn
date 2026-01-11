@@ -14,6 +14,9 @@ struct ChatMessageBubble: View {
     let config: MessageDisplayConfig
     let myUserId: String
 
+    @State private var showImageViewer = false
+    @State private var selectedImageIndex = 0
+
     private var message: ChatMessageUIModel {
         config.message
     }
@@ -64,6 +67,13 @@ struct ChatMessageBubble: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, config.showProfile ? 4 : 1)  // 연속 메시지는 패딩 축소
+        .sheet(isPresented: $showImageViewer) {
+            FullScreenImageViewer(
+                imageURLs: message.files,
+                initialIndex: selectedImageIndex,
+                isPresented: $showImageViewer
+            )
+        }
     }
 
     private var messageContent: some View {
@@ -77,7 +87,15 @@ struct ChatMessageBubble: View {
             }
 
             if !message.files.isEmpty {
-                imageGrid
+                MessageImageGrid(
+                    files: message.files,
+                    isSentByMe: message.isSentByMe,
+                    onImageTap: { urlString, index in
+                        selectedImageIndex = index
+                        showImageViewer = true
+                    }
+                )
+                .padding(8)
             }
 
             if message.isTemporary {
@@ -133,32 +151,5 @@ struct ChatMessageBubble: View {
         Text(message.createdAt.toChatTime() ?? "")
             .font(.caption2(.pretendardMedium))
             .foregroundColor(.gray60)
-    }
-
-    private var imageGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
-            ForEach(message.files, id: \.self) { filePath in
-                if let url = filePath.thumbnailURL {
-                    CachedAsyncImage(
-                        url: url,
-                        targetSize: CGSize(width: 200, height: 200),
-                        cachingKit: cachingKit
-                    ) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 100, height: 100)
-                            .clipped()
-                            .cornerRadius(8)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color.gray30)
-                            .frame(width: 100, height: 100)
-                            .cornerRadius(8)
-                    }
-                }
-            }
-        }
-        .padding(8)
     }
 }
