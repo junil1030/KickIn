@@ -112,6 +112,11 @@ struct SubtitleRowView: View {
     }
 
     private func formatTime(_ time: TimeInterval) -> String {
+        // NaN이나 infinite 값 처리
+        guard time.isFinite && !time.isNaN else {
+            return "0:00"
+        }
+
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%d:%02d", minutes, seconds)

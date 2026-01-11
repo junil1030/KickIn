@@ -27,6 +27,7 @@ final class VideoDetailViewModel: ObservableObject {
     private var playerStatusObserver: NSKeyValueObservation?
     private var resourceLoaderDelegate: HLSResourceLoaderDelegate?
     private let resourceLoaderQueue = DispatchQueue(label: "hls.resource.loader")
+    private var qualitySwitchTask: Task<Void, Never>?
 
     init(videoId: String) {
         self.videoId = videoId
@@ -75,6 +76,8 @@ final class VideoDetailViewModel: ObservableObject {
         player = nil
         playerStatusObserver = nil
         resourceLoaderDelegate = nil
+        qualitySwitchTask?.cancel()
+        qualitySwitchTask = nil
     }
 
     func loadStream() async {
@@ -185,25 +188,44 @@ final class VideoDetailViewModel: ObservableObject {
     }
 
     func switchQuality(to quality: VideoStreamQualityDTO) async {
-        guard let qualityUrl = quality.url,
-              let url = resolvedStreamURL(from: qualityUrl) else { return }
+        // 기존 작업 취소 (디바운싱)
+        qualitySwitchTask?.cancel()
 
-        // 현재 재생 위치와 상태 저장
-        let savedTime = player?.currentTime().seconds ?? 0
-        let wasPlaying = playerState.isPlaying
+        // 새 작업 생성
+        qualitySwitchTask = Task {
+            // 0.5초 대기 (디바운싱)
+            try? await Task.sleep(nanoseconds: 500_000_000)
 
-        // 새 URL로 플레이어 재설정
-        await setPlayer(with: url)
-
-        // 이전 위치로 seek
-        await MainActor.run {
-            player?.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
-            if wasPlaying {
-                player?.play()
+            // 취소되었으면 중단
+            guard !Task.isCancelled else {
+                Logger.network.debug("⚠️ Quality switch cancelled")
+                return
             }
-            playerState.selectedQuality = quality
-            playerState.showQualityMenu = false
+
+            guard let qualityUrl = quality.url,
+                  let url = resolvedStreamURL(from: qualityUrl) else { return }
+
+            Logger.network.debug("🎬 Switching quality to: \(quality.quality ?? "unknown")")
+
+            // 현재 재생 위치와 상태 저장
+            let savedTime = player?.currentTime().seconds ?? 0
+            let wasPlaying = playerState.isPlaying
+
+            // 새 URL로 플레이어 재설정
+            await setPlayer(with: url)
+
+            // 이전 위치로 seek
+            await MainActor.run {
+                player?.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
+                if wasPlaying {
+                    player?.play()
+                }
+                playerState.selectedQuality = quality
+                playerState.showQualityMenu = false
+            }
         }
+
+        await qualitySwitchTask?.value
     }
 
     func toggleFullscreen() {
