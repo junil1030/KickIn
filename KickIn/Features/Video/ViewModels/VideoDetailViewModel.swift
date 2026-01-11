@@ -17,6 +17,9 @@ final class VideoDetailViewModel: ObservableObject {
     @Published var selectedSubtitle: VideoStreamSubtitleDTO?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var playerState = VideoPlayerState()
+    @Published var currentTime: TimeInterval = 0
+    @Published var duration: TimeInterval = 0
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
@@ -24,6 +27,8 @@ final class VideoDetailViewModel: ObservableObject {
     private var playerStatusObserver: NSKeyValueObservation?
     private var resourceLoaderDelegate: HLSResourceLoaderDelegate?
     private let resourceLoaderQueue = DispatchQueue(label: "hls.resource.loader")
+    private var qualitySwitchTask: Task<Void, Never>?
+    private var overlayHideTimer: Timer?
 
     init(videoId: String) {
         self.videoId = videoId
@@ -72,6 +77,10 @@ final class VideoDetailViewModel: ObservableObject {
         player = nil
         playerStatusObserver = nil
         resourceLoaderDelegate = nil
+        qualitySwitchTask?.cancel()
+        qualitySwitchTask = nil
+        overlayHideTimer?.invalidate()
+        overlayHideTimer = nil
     }
 
     func loadStream() async {
@@ -148,6 +157,119 @@ final class VideoDetailViewModel: ObservableObject {
             }
             Logger.network.error("❌ Failed to load subtitle: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Player Controls
+
+    func seek(by offset: TimeInterval) {
+        guard let player = player else {
+            Logger.network.debug("⚠️ ViewModel: No player to seek")
+            return
+        }
+        let currentTime = player.currentTime()
+        let newTime = CMTimeAdd(currentTime, CMTime(seconds: offset, preferredTimescale: 600))
+        Logger.network.debug("🎯 ViewModel: Seeking by \(offset)s - from \(currentTime.seconds)s to \(newTime.seconds)s")
+        player.seek(to: newTime)
+    }
+
+    func seek(to time: TimeInterval) {
+        guard let player = player else {
+            Logger.network.debug("⚠️ ViewModel: No player to seek")
+            return
+        }
+        Logger.network.debug("🎯 ViewModel: Seeking to \(time)s")
+        player.seek(to: CMTime(seconds: time, preferredTimescale: 600))
+    }
+
+    func setPlaybackSpeed(_ rate: Float) {
+        guard let player = player else {
+            Logger.network.debug("⚠️ ViewModel: No player to set speed")
+            return
+        }
+        Logger.network.debug("⚡️ ViewModel: Setting playback speed to \(rate)x")
+        player.rate = rate
+    }
+
+    func switchQuality(to quality: VideoStreamQualityDTO) async {
+        // 기존 작업 취소 (디바운싱)
+        qualitySwitchTask?.cancel()
+
+        // 새 작업 생성
+        qualitySwitchTask = Task {
+            // 0.5초 대기 (디바운싱)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
+            // 취소되었으면 중단
+            guard !Task.isCancelled else {
+                Logger.network.debug("⚠️ Quality switch cancelled")
+                return
+            }
+
+            guard let qualityUrl = quality.url,
+                  let url = resolvedStreamURL(from: qualityUrl) else { return }
+
+            Logger.network.debug("🎬 Switching quality to: \(quality.quality ?? "unknown")")
+
+            // 현재 재생 위치와 상태 저장
+            let savedTime = player?.currentTime().seconds ?? 0
+            let wasPlaying = playerState.isPlaying
+
+            // 새 URL로 플레이어 재설정
+            await setPlayer(with: url)
+
+            // 이전 위치로 seek
+            await MainActor.run {
+                player?.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
+                if wasPlaying {
+                    player?.play()
+                }
+                playerState.selectedQuality = quality
+                playerState.showQualityMenu = false
+            }
+        }
+
+        await qualitySwitchTask?.value
+    }
+
+    func toggleFullscreen() {
+        playerState.isFullscreen.toggle()
+    }
+
+    func toggleSubtitleVisibility() {
+        playerState.isSubtitleVisible.toggle()
+    }
+
+    func showOverlayTemporarily() {
+        playerState.showOverlay = true
+        startOverlayHideTimer()
+    }
+
+    func resetOverlayTimer() {
+        // 재생 중일 때만 타이머 시작
+        if playerState.isPlaying {
+            startOverlayHideTimer()
+        }
+    }
+
+    private func startOverlayHideTimer() {
+        // 기존 타이머 취소
+        overlayHideTimer?.invalidate()
+
+        // 재생 중일 때만 3초 후 자동 숨김
+        guard playerState.isPlaying else { return }
+
+        overlayHideTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            // 재생 중이고, 화질 메뉴가 열려있지 않을 때만 숨김
+            if self.playerState.isPlaying && !self.playerState.showQualityMenu {
+                self.playerState.showOverlay = false
+            }
+        }
+    }
+
+    func cancelOverlayTimer() {
+        overlayHideTimer?.invalidate()
+        overlayHideTimer = nil
     }
 
     private func fetchSubtitleText(from url: URL) async throws -> String {
