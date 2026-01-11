@@ -11,6 +11,7 @@ struct ChatDetailView: View {
     @StateObject private var viewModel: ChatDetailViewModel
     @State private var messageText = ""
     @State private var selectedImages: [UIImage] = []
+    @FocusState private var isInputFocused: Bool
 
     let otherParticipantName: String
 
@@ -64,8 +65,12 @@ struct ChatDetailView: View {
                         }
                     }
                     .rotationEffect(.degrees(180))
+                    .padding(.bottom, 16)
                 }
                 .rotationEffect(.degrees(180))
+                .onTapGesture {
+                    isInputFocused = false
+                }
                 .onChange(of: viewModel.chatItems.count) { _, _ in
                     // 새 메시지가 추가되면 스크롤
                     if let firstItem = viewModel.chatItems.first {
@@ -82,6 +87,7 @@ struct ChatDetailView: View {
             ChatInputBar(
                 messageText: $messageText,
                 selectedImages: $selectedImages,
+                isInputFocused: $isInputFocused,
                 onSend: {
                     Task {
                         await viewModel.sendMessage(
@@ -90,6 +96,7 @@ struct ChatDetailView: View {
                         )
                         messageText = ""
                         selectedImages = []
+                        isInputFocused = false
                     }
                 }
             )
