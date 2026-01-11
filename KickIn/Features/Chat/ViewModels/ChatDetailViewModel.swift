@@ -19,6 +19,7 @@ final class ChatDetailViewModel: ObservableObject {
     @Published var isLoadingMore = false
     @Published var hasMoreData = true
     @Published var errorMessage: String?
+    @Published var allMediaItems: [MediaItem] = []  // 채팅방 내 모든 미디어
 
     // MARK: - Private Properties
 
@@ -205,6 +206,16 @@ final class ChatDetailViewModel: ObservableObject {
         }
 
         chatItems = items
+        extractMediaFromMessages()
+    }
+
+    /// 메시지에서 미디어 아이템 추출 (톡서랍용)
+    private func extractMediaFromMessages() {
+        allMediaItems = messages
+            .flatMap { $0.mediaItems(roomId: roomId) }
+            .sorted { $0.createdAt > $1.createdAt }  // 최신순 정렬
+
+        Logger.chat.info("📸 [ChatDetailViewModel] Extracted \(self.allMediaItems.count) media items from \(self.messages.count) messages")
     }
 
     /// API에서 최신 메시지를 가져와 Realm과 동기화 (최적화: lastChat 비교)

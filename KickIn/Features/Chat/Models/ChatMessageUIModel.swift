@@ -17,6 +17,20 @@ struct ChatMessageUIModel: Identifiable, Hashable {
     let isSentByMe: Bool
     let isTemporary: Bool
     let sendFailed: Bool
+
+    // MARK: - Media Items
+    func mediaItems(roomId: String) -> [MediaItem] {
+        files.map { filePath in
+            MediaItem(
+                id: "\(id)_\(filePath)",
+                type: filePath.mediaType,
+                url: filePath,
+                thumbnailURL: filePath,
+                createdAt: createdAt,
+                roomId: roomId
+            )
+        }
+    }
 }
 
 // MARK: - Realm Object → UIModel Extension
