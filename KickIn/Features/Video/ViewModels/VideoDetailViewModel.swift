@@ -28,6 +28,7 @@ final class VideoDetailViewModel: ObservableObject {
     private var resourceLoaderDelegate: HLSResourceLoaderDelegate?
     private let resourceLoaderQueue = DispatchQueue(label: "hls.resource.loader")
     private var qualitySwitchTask: Task<Void, Never>?
+    private var overlayHideTimer: Timer?
 
     init(videoId: String) {
         self.videoId = videoId
@@ -78,6 +79,8 @@ final class VideoDetailViewModel: ObservableObject {
         resourceLoaderDelegate = nil
         qualitySwitchTask?.cancel()
         qualitySwitchTask = nil
+        overlayHideTimer?.invalidate()
+        overlayHideTimer = nil
     }
 
     func loadStream() async {
@@ -234,6 +237,39 @@ final class VideoDetailViewModel: ObservableObject {
 
     func toggleSubtitleVisibility() {
         playerState.isSubtitleVisible.toggle()
+    }
+
+    func showOverlayTemporarily() {
+        playerState.showOverlay = true
+        startOverlayHideTimer()
+    }
+
+    func resetOverlayTimer() {
+        // 재생 중일 때만 타이머 시작
+        if playerState.isPlaying {
+            startOverlayHideTimer()
+        }
+    }
+
+    private func startOverlayHideTimer() {
+        // 기존 타이머 취소
+        overlayHideTimer?.invalidate()
+
+        // 재생 중일 때만 3초 후 자동 숨김
+        guard playerState.isPlaying else { return }
+
+        overlayHideTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            // 재생 중이고, 화질 메뉴가 열려있지 않을 때만 숨김
+            if self.playerState.isPlaying && !self.playerState.showQualityMenu {
+                self.playerState.showOverlay = false
+            }
+        }
+    }
+
+    func cancelOverlayTimer() {
+        overlayHideTimer?.invalidate()
+        overlayHideTimer = nil
     }
 
     private func fetchSubtitleText(from url: URL) async throws -> String {

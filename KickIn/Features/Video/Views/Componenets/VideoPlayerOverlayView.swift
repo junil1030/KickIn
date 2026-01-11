@@ -17,6 +17,7 @@ struct VideoPlayerOverlayView: View {
     let onCaptionTap: () -> Void
     let onQualitySelect: (VideoStreamQualityDTO) -> Void
     let onSeek: (TimeInterval) -> Void
+    let onInteraction: () -> Void
 
     var body: some View {
         ZStack {
@@ -33,7 +34,10 @@ struct VideoPlayerOverlayView: View {
                 // Top bar: CC, 화질 버튼
                 HStack {
                     Spacer()
-                    Button(action: onCaptionTap) {
+                    Button(action: {
+                        onCaptionTap()
+                        onInteraction()
+                    }) {
                         Image(systemName: playerState.isSubtitleVisible ? "captions.bubble.fill" : "captions.bubble")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(playerState.isSubtitleVisible ? Color.deepCoast : Color.gray0)
@@ -43,7 +47,10 @@ struct VideoPlayerOverlayView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button(action: toggleQualityMenu) {
+                    Button(action: {
+                        toggleQualityMenu()
+                        onInteraction()
+                    }) {
                         Image(systemName: "gear")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(Color.gray0)
@@ -59,7 +66,10 @@ struct VideoPlayerOverlayView: View {
                 Spacer()
 
                 // Center: 재생/일시정지 버튼 (크게)
-                Button(action: onPlayPauseTap) {
+                Button(action: {
+                    onPlayPauseTap()
+                    onInteraction()
+                }) {
                     Image(systemName: playerState.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 40, weight: .bold))
                         .foregroundStyle(Color.gray0)
@@ -80,12 +90,18 @@ struct VideoPlayerOverlayView: View {
                         VideoPlayerProgressView(
                             currentTime: currentTime,
                             duration: duration,
-                            onSeek: onSeek
+                            onSeek: { time in
+                                onSeek(time)
+                                onInteraction()
+                            }
                         )
 
                         TimeTextView(time: duration)
 
-                        Button(action: onFullscreenTap) {
+                        Button(action: {
+                            onFullscreenTap()
+                            onInteraction()
+                        }) {
                             Image(systemName: playerState.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(Color.gray0)

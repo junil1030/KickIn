@@ -56,6 +56,9 @@ struct VideoPlayerFullscreenView: View {
                                 },
                                 onSeek: { time in
                                     viewModel.seek(to: time)
+                                },
+                                onInteraction: {
+                                    viewModel.resetOverlayTimer()
                                 }
                             )
                         }
@@ -138,8 +141,13 @@ struct VideoPlayerFullscreenView: View {
         Logger.network.debug("▶️ FullscreenView: Toggle playback - isPlaying: \(isPlaying)")
         if isPlaying {
             player.pause()
+            // 일시정지 시 오버레이 보이기 및 타이머 취소
+            viewModel.playerState.showOverlay = true
+            viewModel.cancelOverlayTimer()
         } else {
             player.play()
+            // 재생 시 오버레이 보이기 및 타이머 시작
+            viewModel.showOverlayTemporarily()
         }
         isPlaying.toggle()
         viewModel.playerState.isPlaying = isPlaying
@@ -147,7 +155,14 @@ struct VideoPlayerFullscreenView: View {
 
     private func toggleOverlay() {
         Logger.network.debug("👁️ FullscreenView: Toggle overlay")
-        viewModel.playerState.showOverlay.toggle()
+        if viewModel.playerState.showOverlay {
+            // 이미 보이는 상태면 숨김
+            viewModel.playerState.showOverlay = false
+            viewModel.cancelOverlayTimer()
+        } else {
+            // 숨겨진 상태면 보이고 타이머 시작
+            viewModel.showOverlayTemporarily()
+        }
     }
 
     // MARK: - Gesture Handlers
