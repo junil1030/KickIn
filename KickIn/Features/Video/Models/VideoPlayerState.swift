@@ -15,6 +15,7 @@ struct VideoPlayerState {
     var showQualityMenu: Bool = false
     var isLongPressing: Bool = false
     var seekFeedback: SeekFeedback? = nil
+    var showOverlay: Bool = true
 }
 
 struct SeekFeedback {

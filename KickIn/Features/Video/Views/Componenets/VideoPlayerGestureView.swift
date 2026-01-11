@@ -15,7 +15,7 @@ struct VideoPlayerGestureView: View {
     let onSeekEnd: () -> Void
     let onLongPressStart: () -> Void
     let onLongPressEnd: () -> Void
-    let onCenterTap: () -> Void
+    let onOverlayToggle: () -> Void
 
     @State private var isLongPressing = false
     @State private var accumulatedSeek: Int = 0
@@ -85,7 +85,7 @@ struct VideoPlayerGestureView: View {
             case .left:
                 handleSeekTap(.backward)
             case .center:
-                onCenterTap()
+                onOverlayToggle()
             case .right:
                 handleSeekTap(.forward)
             }

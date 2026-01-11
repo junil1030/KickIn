@@ -32,25 +32,27 @@ struct VideoPlayerFullscreenView: View {
                             onSeekEnd: applySeekOffset,
                             onLongPressStart: startFastPlayback,
                             onLongPressEnd: endFastPlayback,
-                            onCenterTap: togglePlayback
+                            onOverlayToggle: toggleOverlay
                         )
 
-                        VideoPlayerOverlayView(
-                            playerState: $viewModel.playerState,
-                            qualities: viewModel.streamInfo?.qualities ?? [],
-                            onPlayPauseTap: togglePlayback,
-                            onFullscreenTap: {
-                                exitFullscreen()
-                            },
-                            onCaptionTap: {
-                                viewModel.toggleSubtitleVisibility()
-                            },
-                            onQualitySelect: { quality in
-                                Task {
-                                    await viewModel.switchQuality(to: quality)
+                        if viewModel.playerState.showOverlay {
+                            VideoPlayerOverlayView(
+                                playerState: $viewModel.playerState,
+                                qualities: viewModel.streamInfo?.qualities ?? [],
+                                onPlayPauseTap: togglePlayback,
+                                onFullscreenTap: {
+                                    exitFullscreen()
+                                },
+                                onCaptionTap: {
+                                    viewModel.toggleSubtitleVisibility()
+                                },
+                                onQualitySelect: { quality in
+                                    Task {
+                                        await viewModel.switchQuality(to: quality)
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
 
                         // 시크 피드백 표시
                         if let feedback = viewModel.playerState.seekFeedback {
@@ -135,6 +137,11 @@ struct VideoPlayerFullscreenView: View {
         }
         isPlaying.toggle()
         viewModel.playerState.isPlaying = isPlaying
+    }
+
+    private func toggleOverlay() {
+        Logger.network.debug("👁️ FullscreenView: Toggle overlay")
+        viewModel.playerState.showOverlay.toggle()
     }
 
     // MARK: - Gesture Handlers
