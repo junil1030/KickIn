@@ -6,14 +6,15 @@
 //
 
 import SwiftUI
+import OSLog
 import CachingKit
 
 struct MessageImageGrid: View {
     @Environment(\.cachingKit) private var cachingKit
 
-    let files: [String]
+    let mediaItems: [MediaItem]
     let isSentByMe: Bool
-    let onImageTap: (String, Int) -> Void
+    let onImageTap: (MediaItem, Int) -> Void
 
     // 채팅 버블의 최대 너비 (화면의 70%)
     private var maxWidth: CGFloat {
@@ -22,7 +23,7 @@ struct MessageImageGrid: View {
 
     var body: some View {
         Group {
-            switch files.count {
+            switch mediaItems.count {
             case 1:
                 singleImageLayout
             case 2:
@@ -130,36 +131,62 @@ struct MessageImageGrid: View {
     // MARK: - Helper: 이미지 뷰 생성
     @ViewBuilder
     private func imageView(at index: Int) -> some View {
-        if index < files.count,
-           let url = files[index].thumbnailURL {
+        if index < mediaItems.count {
+            let item = mediaItems[index]
 
-            let mediaType = files[index].mediaType
+            if item.type == .video {
+                // 비디오: 서버 썸네일 표시
+                if let thumbnailURL = item.thumbnailURL?.thumbnailURL {
+                    ZStack {
+                        // 서버에서 제공하는 썸네일 이미지
+                        CachedAsyncImage(
+                            url: thumbnailURL,
+                            targetSize: CGSize(width: 400, height: 400),
+                            cachingKit: cachingKit
+                        ) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } placeholder: {
+                            Rectangle()
+                                .fill(Color.gray30)
+                        }
 
-            ZStack {
-                // 썸네일
-                CachedAsyncImage(
-                    url: url,
-                    targetSize: CGSize(width: 400, height: 400),
-                    cachingKit: cachingKit
-                ) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()  // aspectFill (crop)
-                } placeholder: {
-                    Rectangle()
-                        .fill(Color.gray30)
+                        // Play 버튼 오버레이
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    }
+                    .onTapGesture {
+                        // 비디오 탭 시 전체화면 재생으로 이동
+                        onImageTap(item, index)
+                    }
+                    .onAppear {
+                        Logger.ui.info("🎬 Video file: \(item.url)")
+                        Logger.ui.info("🖼️ Thumbnail URL: \(item.thumbnailURL ?? "nil")")
+                        Logger.ui.info("🔗 Full URL: \(thumbnailURL.absoluteString)")
+                    }
                 }
-
-                // 비디오 Play 아이콘 오버레이
-                if mediaType == .video {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 4)
+            } else {
+                // 이미지: CachedAsyncImage 사용
+                if let imageURL = item.url.thumbnailURL {
+                    CachedAsyncImage(
+                        url: imageURL,
+                        targetSize: CGSize(width: 400, height: 400),
+                        cachingKit: cachingKit
+                    ) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()  // aspectFill (crop)
+                    } placeholder: {
+                        Rectangle()
+                            .fill(Color.gray30)
+                    }
+                    .onTapGesture {
+                        onImageTap(item, index)
+                    }
                 }
-            }
-            .onTapGesture {
-                onImageTap(files[index], index)
             }
         }
     }

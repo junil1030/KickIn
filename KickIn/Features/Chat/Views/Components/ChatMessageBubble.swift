@@ -21,6 +21,10 @@ struct ChatMessageBubble: View {
         config.message
     }
 
+    private var mediaItems: [MediaItem] {
+        message.mediaItems(roomId: config.roomId ?? "")
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if message.isSentByMe {
@@ -69,7 +73,7 @@ struct ChatMessageBubble: View {
         .padding(.vertical, config.showProfile ? 4 : 1)  // 연속 메시지는 패딩 축소
         .sheet(isPresented: $showImageViewer) {
             FullScreenImageViewer(
-                imageURLs: message.files,
+                mediaItems: mediaItems,
                 initialIndex: selectedImageIndex,
                 isPresented: $showImageViewer
             )
@@ -86,11 +90,11 @@ struct ChatMessageBubble: View {
                     .padding(.vertical, 8)
             }
 
-            if !message.files.isEmpty {
+            if !mediaItems.isEmpty {
                 MessageImageGrid(
-                    files: message.files,
+                    mediaItems: mediaItems,
                     isSentByMe: message.isSentByMe,
-                    onImageTap: { urlString, index in
+                    onImageTap: { item, index in
                         selectedImageIndex = index
                         showImageViewer = true
                     }

@@ -13,6 +13,15 @@ extension String {
         return URL(string: urlString)
     }
 
+    /// 비디오 파일 경로에서 썸네일 경로를 생성
+    /// 예: "xxx.mp4" → "xxx-thumb.jpg"
+    var videoThumbnailPath: String {
+        guard mediaType == .video else { return self }
+
+        let pathWithoutExtension = (self as NSString).deletingPathExtension
+        return "\(pathWithoutExtension)-thumb.jpg"
+    }
+
     var timeAgoFromNow: String? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
