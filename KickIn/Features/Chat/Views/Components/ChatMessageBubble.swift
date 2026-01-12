@@ -98,7 +98,22 @@ struct ChatMessageBubble: View {
                 .padding(8)
             }
 
-            if message.isTemporary {
+            // 비디오 업로드 상태 표시
+            if let uploadState = message.uploadState {
+                VStack(spacing: 4) {
+                    ProgressView(value: uploadState.progress)
+                        .progressViewStyle(.linear)
+                        .tint(.deepCream)
+
+                    Text(uploadState.description)
+                        .font(.caption2(.pretendardMedium))
+                        .foregroundColor(.gray60)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+            }
+            // 일반 메시지 전송 중 표시 (비디오가 아닌 경우)
+            else if message.isTemporary {
                 HStack(spacing: 4) {
                     ProgressView()
                         .scaleEffect(0.7)

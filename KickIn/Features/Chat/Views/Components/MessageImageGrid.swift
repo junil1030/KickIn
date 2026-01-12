@@ -132,17 +132,31 @@ struct MessageImageGrid: View {
     private func imageView(at index: Int) -> some View {
         if index < files.count,
            let url = files[index].thumbnailURL {
-            CachedAsyncImage(
-                url: url,
-                targetSize: CGSize(width: 400, height: 400),
-                cachingKit: cachingKit
-            ) { image in
-                image
-                    .resizable()
-                    .scaledToFill()  // aspectFill (crop)
-            } placeholder: {
-                Rectangle()
-                    .fill(Color.gray30)
+
+            let mediaType = files[index].mediaType
+
+            ZStack {
+                // 썸네일
+                CachedAsyncImage(
+                    url: url,
+                    targetSize: CGSize(width: 400, height: 400),
+                    cachingKit: cachingKit
+                ) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()  // aspectFill (crop)
+                } placeholder: {
+                    Rectangle()
+                        .fill(Color.gray30)
+                }
+
+                // 비디오 Play 아이콘 오버레이
+                if mediaType == .video {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 4)
+                }
             }
             .onTapGesture {
                 onImageTap(files[index], index)
