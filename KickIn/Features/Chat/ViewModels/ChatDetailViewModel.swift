@@ -216,7 +216,7 @@ final class ChatDetailViewModel: ObservableObject {
             // next = 시간상 다음 메시지 (더 최신 메시지, index - 1)
             let previous = index < messages.count - 1 ? messages[index + 1] : nil
             let next = index > 0 ? messages[index - 1] : nil
-            let config = MessageDisplayConfig.create(message: message, previous: previous, next: next)
+            let config = MessageDisplayConfig.create(message: message, previous: previous, next: next, roomId: roomId)
 
             // 메시지 먼저 추가
             items.append(.message(config: config))

@@ -15,17 +15,20 @@ struct MessageDisplayConfig: Identifiable, Hashable {
     let showProfile: Bool    // 프로필 이미지 표시 여부
     let showNickname: Bool   // 닉네임 표시 여부
     let showTime: Bool       // 시간 표시 여부
+    let roomId: String?      // 채팅방 ID (미디어 파일 로드용)
 
     /// MessageDisplayConfig 생성
     /// - Parameters:
     ///   - message: 현재 메시지
     ///   - previous: 이전 메시지 (없으면 nil)
     ///   - next: 다음 메시지 (없으면 nil)
+    ///   - roomId: 채팅방 ID
     /// - Returns: 계산된 MessageDisplayConfig
     static func create(
         message: ChatMessageUIModel,
         previous: ChatMessageUIModel?,
-        next: ChatMessageUIModel?
+        next: ChatMessageUIModel?,
+        roomId: String? = nil
     ) -> MessageDisplayConfig {
         let showProfile = shouldShowProfile(message: message, previous: previous)
         let showNickname = showProfile // 프로필과 닉네임은 동일한 조건
@@ -36,7 +39,8 @@ struct MessageDisplayConfig: Identifiable, Hashable {
             message: message,
             showProfile: showProfile,
             showNickname: showNickname,
-            showTime: showTime
+            showTime: showTime,
+            roomId: roomId
         )
     }
 
