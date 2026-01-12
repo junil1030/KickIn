@@ -574,6 +574,12 @@ final class ChatDetailViewModel: ObservableObject {
                 videoUploadProgress.removeValue(forKey: videoId)
                 return try await uploadVideo(videoURL, retryCount: 1)
 
+            case .fileSizeExceeded:
+                // 파일 크기 초과 시 재시도 없이 즉시 에러 표시
+                errorMessage = error.localizedDescription
+                Logger.chat.error("❌ 파일 크기 초과: \(error.localizedDescription)")
+                throw error
+
             case .noVideoTrack:
                 errorMessage = "유효하지 않은 비디오 파일입니다."
                 throw error

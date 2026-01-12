@@ -12,6 +12,7 @@ enum VideoCompressionError: LocalizedError {
     case exportSessionCreationFailed
     case compressionFailed(Error)
     case cancelled
+    case fileSizeExceeded(sizeMB: Double)
     case unknown
 
     var errorDescription: String? {
@@ -24,6 +25,8 @@ enum VideoCompressionError: LocalizedError {
             return "비디오 압축에 실패했습니다: \(error.localizedDescription)"
         case .cancelled:
             return "압축이 취소되었습니다."
+        case .fileSizeExceeded(let sizeMB):
+            return "비디오 파일이 너무 큽니다 (\(String(format: "%.1f", sizeMB))MB). 5MB 이하의 비디오만 전송할 수 있습니다."
         case .unknown:
             return "알 수 없는 오류가 발생했습니다."
         }

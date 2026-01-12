@@ -114,5 +114,14 @@ struct ChatDetailView: View {
         .onDisappear {
             viewModel.disconnect()
         }
+        .alert("오류", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("확인", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+            }
+        }
     }
 }

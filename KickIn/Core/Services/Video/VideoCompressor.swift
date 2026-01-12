@@ -74,6 +74,9 @@ final class VideoCompressor {
         quality: CompressionQuality = .medium,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
+        // 원본 파일 크기 체크
+        try checkFileSize(url: url)
+
 //        let asset = AVAsset(url: url)
         let asset = AVURLAsset(url: url)
 
@@ -169,6 +172,10 @@ final class VideoCompressor {
         switch exportSession.status {
         case .completed:
             Logger.chat.info("✅ Video compression completed")
+
+            // 압축 후 파일 크기 체크
+            try checkFileSize(url: outputURL)
+
             await MainActor.run {
                 progressHandler(1.0)
             }
@@ -201,6 +208,26 @@ final class VideoCompressor {
     }
 
     // MARK: - Private Methods
+
+    /// 파일 크기 체크 (5MB 제한)
+    private func checkFileSize(url: URL) throws {
+        let maxFileSize: Int64 = 5 * 1024 * 1024 // 5MB in bytes
+
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let fileSize = attributes[.size] as? Int64 else {
+            Logger.chat.error("❌ 파일 크기를 확인할 수 없습니다.")
+            throw VideoCompressionError.unknown
+        }
+
+        let fileSizeMB = Double(fileSize) / (1024.0 * 1024.0)
+
+        if fileSize > maxFileSize {
+            Logger.chat.error("❌ 파일 크기 초과: \(fileSizeMB)MB > 5MB")
+            throw VideoCompressionError.fileSizeExceeded(sizeMB: fileSizeMB)
+        }
+
+        Logger.chat.info("✅ 파일 크기 확인: \(String(format: "%.2f", fileSizeMB))MB")
+    }
 
     /// 압축 필요 여부 판단 (Pass-through 로직)
     private func shouldCompress(
