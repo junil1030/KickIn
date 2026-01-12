@@ -11,6 +11,8 @@ struct ChatDetailView: View {
     @StateObject private var viewModel: ChatDetailViewModel
     @State private var messageText = ""
     @State private var selectedImages: [UIImage] = []
+    @State private var selectedVideoURLs: [URL] = []
+    @FocusState private var isInputFocused: Bool
 
     let otherParticipantName: String
 
@@ -51,21 +53,17 @@ struct ChatDetailView: View {
                                     myUserId: viewModel.myUserId
                                 )
                                 .id(item.id)
-//                                .onAppear {
-//                                    // 마지막 메시지에 도달하면 더 로드
-//                                    if case .message(let lastConfig) = viewModel.chatItems.last,
-//                                       lastConfig.id == config.id {
-//                                        Task {
-//                                            await viewModel.loadMoreMessages()
-//                                        }
-//                                    }
-//                                }
                             }
                         }
                     }
                     .rotationEffect(.degrees(180))
+                    .padding(.bottom, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .rotationEffect(.degrees(180))
+                .onTapGesture {
+                    isInputFocused = false
+                }
                 .onChange(of: viewModel.chatItems.count) { _, _ in
                     // 새 메시지가 추가되면 스크롤
                     if let firstItem = viewModel.chatItems.first {
@@ -82,14 +80,19 @@ struct ChatDetailView: View {
             ChatInputBar(
                 messageText: $messageText,
                 selectedImages: $selectedImages,
+                selectedVideoURLs: $selectedVideoURLs,
+                isInputFocused: $isInputFocused,
                 onSend: {
                     Task {
                         await viewModel.sendMessage(
                             content: messageText.isEmpty ? nil : messageText,
-                            images: selectedImages
+                            images: selectedImages,
+                            videos: selectedVideoURLs
                         )
                         messageText = ""
                         selectedImages = []
+                        selectedVideoURLs = []
+                        isInputFocused = false
                     }
                 }
             )
@@ -102,6 +105,15 @@ struct ChatDetailView: View {
         }
         .onDisappear {
             viewModel.disconnect()
+        }
+        .alert("오류", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("확인", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+            }
         }
     }
 }

@@ -150,6 +150,59 @@ final class NetworkService: NetworkServiceProtocol {
         }
     }
 
+    func uploadWithProgress<T: Decodable>(
+        _ router: any APIRouter,
+        files: [(data: Data, name: String, fileName: String, mimeType: String)],
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> T {
+        Logger.network.debug("Upload with progress started: \(String(describing: router))")
+
+        return try await withCheckedThrowingContinuation { continuation in
+            session.upload(multipartFormData: { multipartFormData in
+                for file in files {
+                    multipartFormData.append(
+                        file.data,
+                        withName: file.name,
+                        fileName: file.fileName,
+                        mimeType: file.mimeType
+                    )
+                }
+            }, with: router)
+            .uploadProgress { progress in
+                Task { @MainActor in
+                    Logger.network.debug("Upload progress: \(progress.fractionCompleted)")
+                    progressHandler(progress.fractionCompleted)
+                }
+            }
+            .validate()
+            .responseDecodable(of: T.self) { response in
+                Logger.network.debug("Upload response received")
+                Logger.network.debug("Status Code: \(response.response?.statusCode ?? 0)")
+
+#if DEBUG
+                if let data = response.data, let dataString = String(data: data, encoding: .utf8) {
+                    Logger.network.debug("Response Data: \(dataString)")
+                }
+#endif
+
+                switch response.result {
+                case .success(let value):
+                    Logger.network.info("Upload succeeded")
+                    continuation.resume(returning: value)
+                case .failure(let error):
+                    Logger.network.error("Upload failed: \(error.localizedDescription)")
+                    let networkError = self.mapError(
+                        error,
+                        data: response.data,
+                        statusCode: response.response?.statusCode
+                    )
+                    Logger.network.error("Mapped error: \(networkError.localizedDescription)")
+                    continuation.resume(throwing: networkError)
+                }
+            }
+        }
+    }
+
     // MARK: - Private Methods
 
     private func mapError(_ error: AFError, data: Data?, statusCode: Int?) -> NetworkError {

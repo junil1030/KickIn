@@ -19,6 +19,8 @@ final class ChatDetailViewModel: ObservableObject {
     @Published var isLoadingMore = false
     @Published var hasMoreData = true
     @Published var errorMessage: String?
+    @Published var allMediaItems: [MediaItem] = []  // 채팅방 내 모든 미디어
+    @Published var videoUploadProgress: [String: VideoUploadProgress] = [:]  // 비디오 업로드 진행률
 
     // MARK: - Private Properties
 
@@ -36,6 +38,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
     private let repository: ChatMessageRepositoryProtocol
     private let socketService: SocketServiceProtocol
+    private let videoUploadService: VideoUploadService
 
     private var connectionTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
@@ -46,12 +49,14 @@ final class ChatDetailViewModel: ObservableObject {
         roomId: String,
         opponentUserId: String,
         repository: ChatMessageRepositoryProtocol = ChatMessageRepository(),
-        socketService: SocketServiceProtocol = SocketService.shared
+        socketService: SocketServiceProtocol = SocketService.shared,
+        networkService: NetworkServiceProtocol = NetworkServiceFactory.shared.makeNetworkService()
     ) {
         self.roomId = roomId
         self.opponentUserId = opponentUserId
         self.repository = repository
         self.socketService = socketService
+        self.videoUploadService = VideoUploadService(networkService: networkService)
     }
 
     deinit {
@@ -148,8 +153,9 @@ final class ChatDetailViewModel: ObservableObject {
         isLoadingMore = false
     }
 
-    func sendMessage(content: String?, images: [UIImage]) async {
+    func sendMessage(content: String?, images: [UIImage], videos: [URL]) async {
         var filePaths: [String] = []
+        var localThumbnailURLs: [URL] = []  // Optimistic UI용 로컬 URL 저장
 
         // 1. 이미지 업로드
         if !images.isEmpty {
@@ -162,8 +168,31 @@ final class ChatDetailViewModel: ObservableObject {
             }
         }
 
-        // 2. 메시지 전송
-        await sendMessageWithFiles(content: content, filePaths: filePaths)
+        // 2. 비디오 업로드
+        for videoURL in videos {
+            do {
+                let result = try await uploadVideo(videoURL)
+
+                // 서버 응답 순서: [thumbnailURL, videoURL]
+                filePaths.append(result.thumbnailURL)
+                filePaths.append(result.videoURL)
+
+                // Optimistic UI용 로컬 썸네일 URL 저장
+                localThumbnailURLs.append(result.localThumbnailURL)
+
+            } catch {
+                Logger.chat.error("❌ Failed to upload video: \(error)")
+                errorMessage = "비디오 업로드에 실패했습니다."
+                return
+            }
+        }
+
+        // 3. 메시지 전송 (Optimistic UI와 함께)
+        await sendMessageWithFiles(
+            content: content,
+            filePaths: filePaths,
+            localThumbnailURLs: localThumbnailURLs
+        )
     }
 
     func disconnect() {
@@ -187,7 +216,7 @@ final class ChatDetailViewModel: ObservableObject {
             // next = 시간상 다음 메시지 (더 최신 메시지, index - 1)
             let previous = index < messages.count - 1 ? messages[index + 1] : nil
             let next = index > 0 ? messages[index - 1] : nil
-            let config = MessageDisplayConfig.create(message: message, previous: previous, next: next)
+            let config = MessageDisplayConfig.create(message: message, previous: previous, next: next, roomId: roomId)
 
             // 메시지 먼저 추가
             items.append(.message(config: config))
@@ -205,6 +234,16 @@ final class ChatDetailViewModel: ObservableObject {
         }
 
         chatItems = items
+        extractMediaFromMessages()
+    }
+
+    /// 메시지에서 미디어 아이템 추출 (톡서랍용)
+    private func extractMediaFromMessages() {
+        allMediaItems = messages
+            .flatMap { $0.mediaItems(roomId: roomId) }
+            .sorted { $0.createdAt > $1.createdAt }  // 최신순 정렬
+
+        Logger.chat.info("📸 [ChatDetailViewModel] Extracted \(self.allMediaItems.count) media items from \(self.messages.count) messages")
     }
 
     /// API에서 최신 메시지를 가져와 Realm과 동기화 (최적화: lastChat 비교)
@@ -465,10 +504,71 @@ final class ChatDetailViewModel: ObservableObject {
         return response.files ?? []
     }
 
-    private func sendMessageWithFiles(content: String?, filePaths: [String]) async {
+    private func uploadVideo(_ videoURL: URL, retryCount: Int = 0) async throws -> VideoUploadResult {
+        let videoUUID = UUID().uuidString
+
+        // 임시 파일 정리를 보장 (성공/실패 무관)
+        defer {
+            videoUploadService.cleanupTemporaryFiles(videoUUID: videoUUID)
+            videoUploadProgress.removeValue(forKey: videoUUID)
+        }
+
+        do {
+            // Task cancellation 체크
+            try Task.checkCancellation()
+
+            // VideoUploadService를 사용한 전체 플로우
+            let result = try await videoUploadService.uploadVideoWithThumbnail(
+                videoURL: videoURL,
+                roomId: roomId,
+                quality: retryCount > 0 ? .low : .medium
+            ) { [weak self] progress in
+                Task { @MainActor in
+                    self?.videoUploadProgress[videoUUID] = progress
+                }
+            }
+
+            return result
+
+        } catch let error as VideoCompressionError {
+            switch error {
+            case .compressionFailed where retryCount == 0:
+                // 압축 실패 시 낮은 품질로 1회 재시도
+                Logger.chat.warning("⚠️ 압축 실패, 낮은 품질로 재시도")
+                videoUploadProgress.removeValue(forKey: videoUUID)
+                return try await uploadVideo(videoURL, retryCount: 1)
+
+            case .fileSizeExceeded:
+                // 파일 크기 초과 시 재시도 없이 즉시 에러 표시
+                errorMessage = error.localizedDescription
+                Logger.chat.error("❌ 파일 크기 초과: \(error.localizedDescription)")
+                throw error
+
+            default:
+                errorMessage = error.localizedDescription
+                throw error
+            }
+        } catch {
+            // 기타 에러
+            Logger.chat.error("❌ Video upload failed: \(error)")
+            errorMessage = "비디오 업로드에 실패했습니다."
+            throw error
+        }
+    }
+
+    private func sendMessageWithFiles(
+        content: String?,
+        filePaths: [String],
+        localThumbnailURLs: [URL] = []
+    ) async {
         // Optimistic UI: 임시 메시지 생성
         let tempChatId = UUID().uuidString
         let createdAt = ISO8601DateFormatter().string(from: Date())
+
+        // Optimistic UI용 파일 배열 (로컬 썸네일 사용)
+        let optimisticFiles = localThumbnailURLs.isEmpty
+            ? filePaths
+            : localThumbnailURLs.map { $0.absoluteString } + filePaths.filter { !$0.contains("-thumb.") }
 
         // Realm Actor 내부에서 객체 생성
         try? await repository.createAndSaveMessage(
@@ -481,19 +581,19 @@ final class ChatDetailViewModel: ObservableObject {
             senderNickname: myNickname.isEmpty ? "나" : myNickname,
             senderProfileImage: myProfileImage,
             senderIntroduction: nil,
-            files: filePaths,
+            files: optimisticFiles,
             isSentByMe: true,
             isTemporary: true
         )
 
-        // UI 업데이트용 모델
+        // UI 업데이트용 모델 (로컬 썸네일 즉시 표시)
         let tempUIModel = ChatMessageUIModel(
             id: tempChatId,
             content: content,
             createdAt: createdAt,
             senderNickname: myNickname.isEmpty ? "나" : myNickname,
             senderProfileImage: myProfileImage,
-            files: filePaths,
+            files: optimisticFiles,
             isSentByMe: true,
             isTemporary: true,
             sendFailed: false

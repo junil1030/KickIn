@@ -56,6 +56,37 @@ final class MockNetworkService: NetworkServiceProtocol {
         throw NetworkError.decodingError
     }
 
+    func uploadWithProgress<T: Decodable>(
+        _ router: any APIRouter,
+        files: [(data: Data, name: String, fileName: String, mimeType: String)],
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> T {
+        uploadCallCount += 1
+
+        // Mock progress updates
+        Task { @MainActor in
+            progressHandler(0.0)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1초
+        Task { @MainActor in
+            progressHandler(0.5)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1초
+        Task { @MainActor in
+            progressHandler(1.0)
+        }
+
+        if !shouldSucceed, let error = mockError {
+            throw error
+        }
+
+        if let response = mockResponse as? T {
+            return response
+        }
+
+        throw NetworkError.decodingError
+    }
+
     func reset() {
         shouldSucceed = true
         mockResponse = nil
