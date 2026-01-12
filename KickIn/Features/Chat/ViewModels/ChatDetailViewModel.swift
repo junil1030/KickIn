@@ -20,6 +20,7 @@ final class ChatDetailViewModel: ObservableObject {
     @Published var hasMoreData = true
     @Published var errorMessage: String?
     @Published var allMediaItems: [MediaItem] = []  // 채팅방 내 모든 미디어
+    @Published var videoUploadProgress: [String: VideoCompressionProgress] = [:]  // 비디오 업로드 진행률
 
     // MARK: - Private Properties
 
@@ -149,7 +150,7 @@ final class ChatDetailViewModel: ObservableObject {
         isLoadingMore = false
     }
 
-    func sendMessage(content: String?, images: [UIImage]) async {
+    func sendMessage(content: String?, images: [UIImage], videos: [URL]) async {
         var filePaths: [String] = []
 
         // 1. 이미지 업로드
@@ -163,7 +164,19 @@ final class ChatDetailViewModel: ObservableObject {
             }
         }
 
-        // 2. 메시지 전송
+        // 2. 비디오 업로드
+        for videoURL in videos {
+            do {
+                let videoPath = try await uploadVideo(videoURL)
+                filePaths.append(videoPath)
+            } catch {
+                Logger.chat.error("❌ Failed to upload video: \(error)")
+                errorMessage = "비디오 업로드에 실패했습니다."
+                return
+            }
+        }
+
+        // 3. 메시지 전송
         await sendMessageWithFiles(content: content, filePaths: filePaths)
     }
 
@@ -474,6 +487,69 @@ final class ChatDetailViewModel: ObservableObject {
         )
 
         return response.files ?? []
+    }
+
+    private func uploadVideo(_ videoURL: URL) async throws -> String {
+        let videoId = UUID().uuidString
+
+        // Phase 1: 압축 준비
+        videoUploadProgress[videoId] = VideoCompressionProgress(
+            phase: .preparing,
+            progress: 0.0
+        )
+
+        let compressor = VideoCompressor()
+
+        // Phase 2: 압축
+        videoUploadProgress[videoId] = VideoCompressionProgress(
+            phase: .compressing,
+            progress: 0.0
+        )
+
+        let compressedURL = try await compressor.compress(
+            url: videoURL,
+            quality: .medium
+        ) { progress in
+            Task { @MainActor in
+                self.videoUploadProgress[videoId] = VideoCompressionProgress(
+                    phase: .compressing,
+                    progress: progress
+                )
+            }
+        }
+
+        // Phase 3: 업로드
+        videoUploadProgress[videoId] = VideoCompressionProgress(
+            phase: .uploading,
+            progress: 0.0
+        )
+
+        let videoData = try Data(contentsOf: compressedURL)
+        let fileName = "chat_\(UUID().uuidString).mp4"
+
+        let response: ChatFilesResponseDTO = try await networkService.uploadWithProgress(
+            ChatRouter.uploadFiles(roomId: roomId),
+            files: [(data: videoData, name: "files", fileName: fileName, mimeType: "video/mp4")]
+        ) { progress in
+            Task { @MainActor in
+                self.videoUploadProgress[videoId] = VideoCompressionProgress(
+                    phase: .uploading,
+                    progress: progress
+                )
+            }
+        }
+
+        // 임시 파일 정리
+        try? FileManager.default.removeItem(at: compressedURL)
+
+        // 진행률 정리
+        videoUploadProgress.removeValue(forKey: videoId)
+
+        guard let filePath = response.files?.first else {
+            throw NetworkError.serverError(message: "파일 업로드 응답이 없습니다.")
+        }
+
+        return filePath
     }
 
     private func sendMessageWithFiles(content: String?, filePaths: [String]) async {
