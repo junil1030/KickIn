@@ -31,22 +31,18 @@ final class VideoCompressor {
     // MARK: - Compression Quality
 
     enum CompressionQuality {
-        case high      // HEVC 1920x1080 (HEVC 지원 시), H.264 1920x1080 (fallback)
-        case medium    // HEVC 1280x720
+        case high      // H.264 1920x1080
+        case medium    // H.264 1280x720
         case low       // H.264 960x540
 
-        func preset(hevcSupported: Bool) -> String {
+        var preset: String {
             switch self {
             case .high:
-                return hevcSupported
-                    ? AVAssetExportPresetHEVC1920x1080
-                    : AVAssetExportPresetHighestQuality
+                return AVAssetExportPreset1920x1080
             case .medium:
-                return hevcSupported
-                    ? AVAssetExportPresetHEVC1920x1080
-                    : AVAssetExportPresetMediumQuality
+                return AVAssetExportPreset1280x720
             case .low:
-                return AVAssetExportPresetMediumQuality
+                return AVAssetExportPreset960x540
             }
         }
 
@@ -95,9 +91,8 @@ final class VideoCompressor {
             return outputURL
         }
 
-        // HEVC 지원 여부 확인
-        let hevcSupported = checkHEVCSupport()
-        let preset = quality.preset(hevcSupported: hevcSupported)
+        // H.264 기반 mp4 preset 사용
+        let preset = quality.preset
 
         guard let exportSession = AVAssetExportSession(asset: asset, presetName: preset) else {
             throw VideoCompressionError.exportSessionCreationFailed
@@ -230,7 +225,6 @@ final class VideoCompressor {
         }
 
         // 비트레이트가 이미 효율적이면 pass-through
-        // HEVC는 일반적으로 H.264의 50% 비트레이트로 동일 화질
         let estimatedBitrateMbps = estimatedDataRate / 1_000_000
         if estimatedBitrateMbps < 3.0 { // 3Mbps 미만은 이미 효율적
             Logger.chat.info("✅ 원본 비트레이트(\(estimatedBitrateMbps)Mbps)가 이미 효율적, 압축 건너뜀")
@@ -238,25 +232,6 @@ final class VideoCompressor {
         }
 
         return true
-    }
-
-    /// HEVC 호환성 체크
-    private func checkHEVCSupport() -> Bool {
-        let hevcPresets = [
-            AVAssetExportPresetHEVC1920x1080,
-            AVAssetExportPresetHEVC3840x2160
-        ]
-
-        let allPresets = AVAssetExportSession.allExportPresets()
-        let hevcSupported = hevcPresets.contains { allPresets.contains($0) }
-
-        if hevcSupported {
-            Logger.chat.info("✅ HEVC 인코딩 지원됨")
-        } else {
-            Logger.chat.info("⚠️ HEVC 미지원, H.264 fallback 사용")
-        }
-
-        return hevcSupported
     }
 
     /// 24시간 이상 된 임시 파일 삭제
