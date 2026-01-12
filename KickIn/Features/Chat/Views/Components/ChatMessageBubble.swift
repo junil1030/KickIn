@@ -105,7 +105,7 @@ struct ChatMessageBubble: View {
                         .progressViewStyle(.linear)
                         .tint(.deepCream)
 
-                    Text(uploadState.description)
+                    Text(uploadState.displayText)
                         .font(.caption2(.pretendardMedium))
                         .foregroundColor(.gray60)
                 }

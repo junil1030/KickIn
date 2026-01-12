@@ -17,7 +17,7 @@ struct ChatMessageUIModel: Identifiable, Hashable {
     let isSentByMe: Bool
     let isTemporary: Bool
     let sendFailed: Bool
-    let uploadState: MediaUploadState?
+    let uploadState: VideoUploadProgress?
 
     // MARK: - Initializers
     init(
@@ -30,7 +30,7 @@ struct ChatMessageUIModel: Identifiable, Hashable {
         isSentByMe: Bool,
         isTemporary: Bool,
         sendFailed: Bool,
-        uploadState: MediaUploadState? = nil
+        uploadState: VideoUploadProgress? = nil
     ) {
         self.id = id
         self.content = content
@@ -55,36 +55,6 @@ struct ChatMessageUIModel: Identifiable, Hashable {
                 createdAt: createdAt,
                 roomId: roomId
             )
-        }
-    }
-
-    // MARK: - Media Upload State
-    enum MediaUploadState: Hashable {
-        case compressing(progress: Double)
-        case uploading(progress: Double)
-        case completed
-        case failed(String)
-
-        var description: String {
-            switch self {
-            case .compressing(let progress):
-                return "압축 중... \(Int(progress * 100))%"
-            case .uploading(let progress):
-                return "전송 중... \(Int(progress * 100))%"
-            case .completed:
-                return "완료"
-            case .failed(let reason):
-                return "실패: \(reason)"
-            }
-        }
-
-        var progress: Double {
-            switch self {
-            case .compressing(let p), .uploading(let p):
-                return p
-            default:
-                return 0
-            }
         }
     }
 }

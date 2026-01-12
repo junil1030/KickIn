@@ -20,7 +20,7 @@ final class ChatDetailViewModel: ObservableObject {
     @Published var hasMoreData = true
     @Published var errorMessage: String?
     @Published var allMediaItems: [MediaItem] = []  // 채팅방 내 모든 미디어
-    @Published var videoUploadProgress: [String: VideoCompressionProgress] = [:]  // 비디오 업로드 진행률
+    @Published var videoUploadProgress: [String: VideoUploadProgress] = [:]  // 비디오 업로드 진행률
 
     // MARK: - Private Properties
 
@@ -38,6 +38,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
     private let repository: ChatMessageRepositoryProtocol
     private let socketService: SocketServiceProtocol
+    private let videoUploadService: VideoUploadService
 
     private var connectionTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
@@ -48,12 +49,14 @@ final class ChatDetailViewModel: ObservableObject {
         roomId: String,
         opponentUserId: String,
         repository: ChatMessageRepositoryProtocol = ChatMessageRepository(),
-        socketService: SocketServiceProtocol = SocketService.shared
+        socketService: SocketServiceProtocol = SocketService.shared,
+        networkService: NetworkServiceProtocol = NetworkServiceFactory.shared.makeNetworkService()
     ) {
         self.roomId = roomId
         self.opponentUserId = opponentUserId
         self.repository = repository
         self.socketService = socketService
+        self.videoUploadService = VideoUploadService(networkService: networkService)
     }
 
     deinit {
@@ -152,6 +155,7 @@ final class ChatDetailViewModel: ObservableObject {
 
     func sendMessage(content: String?, images: [UIImage], videos: [URL]) async {
         var filePaths: [String] = []
+        var localThumbnailURLs: [URL] = []  // Optimistic UI용 로컬 URL 저장
 
         // 1. 이미지 업로드
         if !images.isEmpty {
@@ -167,8 +171,15 @@ final class ChatDetailViewModel: ObservableObject {
         // 2. 비디오 업로드
         for videoURL in videos {
             do {
-                let videoPath = try await uploadVideo(videoURL)
-                filePaths.append(videoPath)
+                let result = try await uploadVideo(videoURL)
+
+                // 서버 응답 순서: [thumbnailURL, videoURL]
+                filePaths.append(result.thumbnailURL)
+                filePaths.append(result.videoURL)
+
+                // Optimistic UI용 로컬 썸네일 URL 저장
+                localThumbnailURLs.append(result.localThumbnailURL)
+
             } catch {
                 Logger.chat.error("❌ Failed to upload video: \(error)")
                 errorMessage = "비디오 업로드에 실패했습니다."
@@ -176,8 +187,12 @@ final class ChatDetailViewModel: ObservableObject {
             }
         }
 
-        // 3. 메시지 전송
-        await sendMessageWithFiles(content: content, filePaths: filePaths)
+        // 3. 메시지 전송 (Optimistic UI와 함께)
+        await sendMessageWithFiles(
+            content: content,
+            filePaths: filePaths,
+            localThumbnailURLs: localThumbnailURLs
+        )
     }
 
     func disconnect() {
@@ -489,89 +504,38 @@ final class ChatDetailViewModel: ObservableObject {
         return response.files ?? []
     }
 
-    private func uploadVideo(_ videoURL: URL, retryCount: Int = 0) async throws -> String {
-        let videoId = UUID().uuidString
-        var compressedURL: URL?
+    private func uploadVideo(_ videoURL: URL, retryCount: Int = 0) async throws -> VideoUploadResult {
+        let videoUUID = UUID().uuidString
 
         // 임시 파일 정리를 보장 (성공/실패 무관)
         defer {
-            if let url = compressedURL {
-                try? FileManager.default.removeItem(at: url)
-                Logger.chat.info("🗑️ 임시 파일 정리: \(url.lastPathComponent)")
-            }
-            // 진행률 정리
-            videoUploadProgress.removeValue(forKey: videoId)
+            videoUploadService.cleanupTemporaryFiles(videoUUID: videoUUID)
+            videoUploadProgress.removeValue(forKey: videoUUID)
         }
 
         do {
             // Task cancellation 체크
             try Task.checkCancellation()
 
-            // Phase 1: 압축 준비
-            videoUploadProgress[videoId] = VideoCompressionProgress(
-                phase: .preparing,
-                progress: 0.0
-            )
-
-            let compressor = VideoCompressor()
-
-            // Phase 2: 압축
-            videoUploadProgress[videoId] = VideoCompressionProgress(
-                phase: .compressing,
-                progress: 0.0
-            )
-
-            // 재시도 시 낮은 품질 사용
-            let quality: VideoCompressor.CompressionQuality = retryCount > 0 ? .low : .medium
-
-            compressedURL = try await compressor.compress(
-                url: videoURL,
-                quality: quality
-            ) { progress in
+            // VideoUploadService를 사용한 전체 플로우
+            let result = try await videoUploadService.uploadVideoWithThumbnail(
+                videoURL: videoURL,
+                roomId: roomId,
+                quality: retryCount > 0 ? .low : .medium
+            ) { [weak self] progress in
                 Task { @MainActor in
-                    self.videoUploadProgress[videoId] = VideoCompressionProgress(
-                        phase: .compressing,
-                        progress: progress
-                    )
+                    self?.videoUploadProgress[videoUUID] = progress
                 }
             }
 
-            // Task cancellation 체크
-            try Task.checkCancellation()
-
-            // Phase 3: 업로드
-            videoUploadProgress[videoId] = VideoCompressionProgress(
-                phase: .uploading,
-                progress: 0.0
-            )
-
-            guard let uploadURL = compressedURL else {
-                throw VideoCompressionError.unknown
-            }
-
-            let videoData = try Data(contentsOf: uploadURL)
-            let fileName = "chat_\(UUID().uuidString).mp4"
-
-            // 네트워크 재시도 로직과 함께 업로드
-            let response = try await uploadWithRetry(
-                videoData: videoData,
-                fileName: fileName,
-                videoId: videoId,
-                maxRetries: 2
-            )
-
-            guard let filePath = response.files?.first else {
-                throw NetworkError.serverError(message: "파일 업로드 응답이 없습니다.")
-            }
-
-            return filePath
+            return result
 
         } catch let error as VideoCompressionError {
             switch error {
             case .compressionFailed where retryCount == 0:
                 // 압축 실패 시 낮은 품질로 1회 재시도
                 Logger.chat.warning("⚠️ 압축 실패, 낮은 품질로 재시도")
-                videoUploadProgress.removeValue(forKey: videoId)
+                videoUploadProgress.removeValue(forKey: videoUUID)
                 return try await uploadVideo(videoURL, retryCount: 1)
 
             case .fileSizeExceeded:
@@ -580,69 +544,31 @@ final class ChatDetailViewModel: ObservableObject {
                 Logger.chat.error("❌ 파일 크기 초과: \(error.localizedDescription)")
                 throw error
 
-            case .noVideoTrack:
-                errorMessage = "유효하지 않은 비디오 파일입니다."
-                throw error
-
-            case .cancelled:
-                Logger.chat.info("ℹ️ 비디오 업로드가 취소되었습니다.")
-                throw error
-
             default:
                 errorMessage = error.localizedDescription
                 throw error
             }
         } catch {
             // 기타 에러
-            Logger.chat.error("❌ 비디오 업로드 실패: \(error)")
+            Logger.chat.error("❌ Video upload failed: \(error)")
             errorMessage = "비디오 업로드에 실패했습니다."
             throw error
         }
     }
 
-    /// 네트워크 재시도 로직이 포함된 업로드 메서드
-    private func uploadWithRetry(
-        videoData: Data,
-        fileName: String,
-        videoId: String,
-        maxRetries: Int = 2
-    ) async throws -> ChatFilesResponseDTO {
-        var lastError: Error?
-
-        for attempt in 0..<maxRetries {
-            do {
-                let response: ChatFilesResponseDTO = try await networkService.uploadWithProgress(
-                    ChatRouter.uploadFiles(roomId: roomId),
-                    files: [(data: videoData, name: "files", fileName: fileName, mimeType: "video/mp4")]
-                ) { progress in
-                    Task { @MainActor in
-                        self.videoUploadProgress[videoId] = VideoCompressionProgress(
-                            phase: .uploading,
-                            progress: progress
-                        )
-                    }
-                }
-                return response
-
-            } catch let error as NetworkError {
-                lastError = error
-                Logger.chat.warning("⚠️ 업로드 실패 (시도 \(attempt + 1)/\(maxRetries)): \(error.localizedDescription)")
-
-                // 마지막 시도가 아니면 exponential backoff
-                if attempt < maxRetries - 1 {
-                    let delay = pow(2.0, Double(attempt)) * 1_000_000_000 // 1초, 2초
-                    try? await Task.sleep(nanoseconds: UInt64(delay))
-                }
-            }
-        }
-
-        throw lastError ?? NetworkError.unknown
-    }
-
-    private func sendMessageWithFiles(content: String?, filePaths: [String]) async {
+    private func sendMessageWithFiles(
+        content: String?,
+        filePaths: [String],
+        localThumbnailURLs: [URL] = []
+    ) async {
         // Optimistic UI: 임시 메시지 생성
         let tempChatId = UUID().uuidString
         let createdAt = ISO8601DateFormatter().string(from: Date())
+
+        // Optimistic UI용 파일 배열 (로컬 썸네일 사용)
+        let optimisticFiles = localThumbnailURLs.isEmpty
+            ? filePaths
+            : localThumbnailURLs.map { $0.absoluteString } + filePaths.filter { !$0.contains("-thumb.") }
 
         // Realm Actor 내부에서 객체 생성
         try? await repository.createAndSaveMessage(
@@ -655,19 +581,19 @@ final class ChatDetailViewModel: ObservableObject {
             senderNickname: myNickname.isEmpty ? "나" : myNickname,
             senderProfileImage: myProfileImage,
             senderIntroduction: nil,
-            files: filePaths,
+            files: optimisticFiles,
             isSentByMe: true,
             isTemporary: true
         )
 
-        // UI 업데이트용 모델
+        // UI 업데이트용 모델 (로컬 썸네일 즉시 표시)
         let tempUIModel = ChatMessageUIModel(
             id: tempChatId,
             content: content,
             createdAt: createdAt,
             senderNickname: myNickname.isEmpty ? "나" : myNickname,
             senderProfileImage: myProfileImage,
-            files: filePaths,
+            files: optimisticFiles,
             isSentByMe: true,
             isTemporary: true,
             sendFailed: false

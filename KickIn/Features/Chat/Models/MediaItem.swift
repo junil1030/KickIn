@@ -33,4 +33,9 @@ extension String {
         let ext = (self as NSString).pathExtension.lowercased()
         return videoExtensions.contains(ext) ? .video : .image
     }
+
+    /// 비디오 URL에서 썸네일 URL 생성
+    func toThumbnailURL() -> String {
+        VideoUploadService.getThumbnailURL(from: self)
+    }
 }
