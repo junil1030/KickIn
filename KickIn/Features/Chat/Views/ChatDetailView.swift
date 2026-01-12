@@ -11,6 +11,7 @@ struct ChatDetailView: View {
     @StateObject private var viewModel: ChatDetailViewModel
     @State private var messageText = ""
     @State private var selectedImages: [UIImage] = []
+    @State private var selectedVideoURLs: [URL] = []
     @FocusState private var isInputFocused: Bool
 
     let otherParticipantName: String
@@ -87,15 +88,18 @@ struct ChatDetailView: View {
             ChatInputBar(
                 messageText: $messageText,
                 selectedImages: $selectedImages,
+                selectedVideoURLs: $selectedVideoURLs,
                 isInputFocused: $isInputFocused,
                 onSend: {
                     Task {
                         await viewModel.sendMessage(
                             content: messageText.isEmpty ? nil : messageText,
-                            images: selectedImages
+                            images: selectedImages,
+                            videos: selectedVideoURLs
                         )
                         messageText = ""
                         selectedImages = []
+                        selectedVideoURLs = []
                         isInputFocused = false
                     }
                 }
