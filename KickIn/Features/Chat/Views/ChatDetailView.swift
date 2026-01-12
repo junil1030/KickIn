@@ -53,21 +53,13 @@ struct ChatDetailView: View {
                                     myUserId: viewModel.myUserId
                                 )
                                 .id(item.id)
-//                                .onAppear {
-//                                    // 마지막 메시지에 도달하면 더 로드
-//                                    if case .message(let lastConfig) = viewModel.chatItems.last,
-//                                       lastConfig.id == config.id {
-//                                        Task {
-//                                            await viewModel.loadMoreMessages()
-//                                        }
-//                                    }
-//                                }
                             }
                         }
                     }
                     .rotationEffect(.degrees(180))
                     .padding(.bottom, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .rotationEffect(.degrees(180))
                 .onTapGesture {
                     isInputFocused = false
