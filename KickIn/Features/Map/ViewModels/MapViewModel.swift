@@ -15,6 +15,7 @@ final class MapViewModel: ObservableObject {
     @Published var mapPoints: [MapPoint] = []
     @Published var quadPoints: [QuadPoint] = []
     @Published var clusters: [ClusterCenter] = []
+    @Published var noisePoints: [QuadPoint] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -104,12 +105,13 @@ final class MapViewModel: ObservableObject {
             let quadPoints = estates.compactMap { $0.toQuadPoint() }
 
             // Perform clustering
-            let clusterResult = await performClustering(points: quadPoints)
+            let clusterResult = await performClustering(points: quadPoints, maxDistance: event.maxDistance)
 
             await MainActor.run {
                 self.mapPoints = mapPoints
                 self.quadPoints = quadPoints
                 self.clusters = clusterResult.clusterCenters()
+                self.noisePoints = clusterResult.noise
                 self.isLoading = false
             }
 
@@ -182,34 +184,43 @@ final class MapViewModel: ObservableObject {
 
     // MARK: - Clustering
 
-    /// 클러스터링 수행 (적응형 epsilon 사용)
-    /// - Parameter points: 클러스터링할 QuadPoint 배열
+    /// 클러스터링 수행 (줌 레벨 기반)
+    /// - Parameters:
+    ///   - points: 클러스터링할 QuadPoint 배열
+    ///   - maxDistance: 지도 반경 (미터)
     /// - Returns: ClusterResult
-    private func performClustering(points: [QuadPoint]) async -> ClusterResult {
-        // 점이 너무 적으면 클러스터링 건너뛰기
-        guard points.count > 10 else {
-            // 모든 점을 개별 클러스터로 반환
-            let individualClusters = points.map { [$0] }
-            return ClusterResult(clusters: individualClusters, noise: [])
-        }
+    private func performClustering(points: [QuadPoint], maxDistance: Int) async -> ClusterResult {
+        // 줌 레벨(반경)에 따른 적응형 epsilon과 minPoints
+        let epsilon = calculateAdaptiveEpsilon(maxDistance: maxDistance)
+        let minPoints = calculateAdaptiveMinPts(maxDistance: maxDistance)
 
-        // 점 개수에 따른 적응형 epsilon
-        let epsilon = calculateAdaptiveEpsilon(pointCount: points.count)
-
-        // ClusteringService를 통해 클러스터링
+        // ClusteringService를 통해 클러스터링 수행
+        // 모든 줌 레벨에서 클러스터링을 수행하여:
+        // - 밀집 지역: 클러스터로 표시
+        // - 떨어진 점: 노이즈(개별 마커)로 표시
         return await clusteringService.cluster(
             points: points,
             epsilon: epsilon,
-            minPoints: SpatialConstants.defaultMinPoints
+            minPoints: minPoints
         )
     }
 
-    /// 점 개수에 따른 적응형 epsilon 계산
-    /// - Parameter pointCount: 점 개수
+    /// 줌 레벨(반경)에 따른 적응형 epsilon 계산
+    /// - Parameter maxDistance: 지도 반경 (미터)
     /// - Returns: 적절한 epsilon 값 (미터)
-    private func calculateAdaptiveEpsilon(pointCount: Int) -> Double {
-        // 점이 많을수록 작은 epsilon 사용 (세밀한 클러스터링)
-        return SpatialConstants.epsilon(forPointCount: pointCount)
+    private func calculateAdaptiveEpsilon(maxDistance: Int) -> Double {
+        // 줌 아웃할수록 (반경이 클수록) 큰 epsilon 사용 (넓은 범위 클러스터링)
+        // 줌 인할수록 (반경이 작을수록) 작은 epsilon 사용 (세밀한 클러스터링)
+        SpatialConstants.epsilon(forMaxDistance: maxDistance)
+    }
+    
+    /// 줌 레벨(반경)에 따른 적응형 minPts 계산
+    /// - Parameter maxDistance: 지도 반경 (미터)
+    /// - Returns: 적절한 minPts 값 (미터)
+    private func calculateAdaptiveMinPts(maxDistance: Int) -> Int {
+        // 줌 아웃할수록 (반경이 클수록) 큰 epsilon 사용 (넓은 범위 클러스터링)
+        // 줌 인할수록 (반경이 작을수록) 작은 epsilon 사용 (세밀한 클러스터링)
+        SpatialConstants.minPoints(forMaxDistance: maxDistance)
     }
 }
 

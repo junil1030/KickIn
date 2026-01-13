@@ -23,6 +23,7 @@ struct NaverMapView: UIViewRepresentable {
 
     func updateUIView(_ uiView: NMFNaverMapView, context: Context) {
         context.coordinator.updateClusters(viewModel.clusters, on: uiView.mapView)
+        context.coordinator.updateNoiseMarkers(viewModel.noisePoints, on: uiView.mapView)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -33,6 +34,7 @@ struct NaverMapView: UIViewRepresentable {
     final class Coordinator: NSObject, NMFMapViewCameraDelegate {
         private let viewModel: MapViewModel
         private var clusterMarkers: [NMFMarker] = []
+        private var noiseMarkers: [NMFMarker] = []
 
         init(viewModel: MapViewModel) {
             self.viewModel = viewModel
@@ -45,6 +47,21 @@ struct NaverMapView: UIViewRepresentable {
                 marker.position = NMGLatLng(lat: cluster.coordinate.latitude, lng: cluster.coordinate.longitude)
                 marker.captionText = "\(cluster.pointCount)"
                 marker.captionMinZoom = 0
+                marker.mapView = mapView
+                return marker
+            }
+        }
+
+        func updateNoiseMarkers(_ noisePoints: [QuadPoint], on mapView: NMFMapView) {
+            // 기존 노이즈 마커 제거
+            noiseMarkers.forEach { $0.mapView = nil }
+
+            // 새로운 노이즈 마커 생성 (개별 마커로 표시)
+            noiseMarkers = noisePoints.map { point in
+                let marker = NMFMarker()
+                marker.position = NMGLatLng(lat: point.coordinate.latitude, lng: point.coordinate.longitude)
+                // 기본 마커 사용 (클러스터와 구별되도록)
+                marker.iconTintColor = UIColor.systemBlue
                 marker.mapView = mapView
                 return marker
             }
