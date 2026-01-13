@@ -18,10 +18,46 @@ struct NaverMapView: UIViewRepresentable {
         // Set delegate to coordinator
         mapView.mapView.addCameraDelegate(delegate: context.coordinator)
 
+        // Set initial camera position if available
+        if let initialLocation = viewModel.initialLocation {
+            let cameraUpdate = NMFCameraUpdate(scrollTo: NMGLatLng(
+                lat: initialLocation.latitude,
+                lng: initialLocation.longitude
+            ))
+            cameraUpdate.animation = .easeIn
+            mapView.mapView.moveCamera(cameraUpdate)
+        }
+
         return mapView
     }
 
     func updateUIView(_ uiView: NMFNaverMapView, context: Context) {
+        // Update initial location if changed and not yet set
+        if let initialLocation = viewModel.initialLocation,
+           !context.coordinator.hasSetInitialLocation {
+            let cameraUpdate = NMFCameraUpdate(scrollTo: NMGLatLng(
+                lat: initialLocation.latitude,
+                lng: initialLocation.longitude
+            ))
+            cameraUpdate.animation = .easeIn
+            cameraUpdate.animationDuration = 1.0
+            uiView.mapView.moveCamera(cameraUpdate)
+            context.coordinator.hasSetInitialLocation = true
+        }
+
+        // Handle move to location button tap
+        if viewModel.shouldMoveToLocation != context.coordinator.lastMoveToLocationTrigger,
+           let initialLocation = viewModel.initialLocation {
+            let cameraUpdate = NMFCameraUpdate(scrollTo: NMGLatLng(
+                lat: initialLocation.latitude,
+                lng: initialLocation.longitude
+            ))
+            cameraUpdate.animation = .easeIn
+            cameraUpdate.animationDuration = 0.5
+            uiView.mapView.moveCamera(cameraUpdate)
+            context.coordinator.lastMoveToLocationTrigger = viewModel.shouldMoveToLocation
+        }
+
         context.coordinator.updateClusters(viewModel.clusters, on: uiView.mapView)
         context.coordinator.updateNoiseMarkers(viewModel.noisePoints, on: uiView.mapView)
     }
@@ -36,6 +72,8 @@ struct NaverMapView: UIViewRepresentable {
         private var clusterMarkers: [NMFMarker] = []
         private var noiseMarkers: [NMFMarker] = []
         private var markerPriceMap: [String: [NMFMarker]] = [:] // priceText -> markers
+        var hasSetInitialLocation = false
+        var lastMoveToLocationTrigger = false
 
         init(viewModel: MapViewModel) {
             self.viewModel = viewModel

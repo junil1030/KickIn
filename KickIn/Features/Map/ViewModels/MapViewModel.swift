@@ -18,10 +18,13 @@ final class MapViewModel: ObservableObject {
     @Published var noisePoints: [QuadPoint] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var initialLocation: CLLocationCoordinate2D?
+    @Published var shouldMoveToLocation = false
 
     // MARK: - Private Properties
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
     private let clusteringService: ClusteringServiceProtocol
+    private let locationManager = LocationManager()
     private var cancellables = Set<AnyCancellable>()
 
     // Combine subject for camera changes (user-initiated only)
@@ -31,6 +34,8 @@ final class MapViewModel: ObservableObject {
     init(clusteringService: ClusteringServiceProtocol = ClusteringService()) {
         self.clusteringService = clusteringService
         setupDebounce()
+        setupLocationObserver()
+        requestLocationPermission()
     }
 
     // MARK: - Setup
@@ -45,7 +50,33 @@ final class MapViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    private func setupLocationObserver() {
+        locationManager.$currentLocation
+            .compactMap { $0 }
+            .sink { [weak self] location in
+                self?.initialLocation = location
+                Logger.ui.info("📍 Initial location set: \(location.latitude), \(location.longitude)")
+            }
+            .store(in: &cancellables)
+    }
+
+    private func requestLocationPermission() {
+        locationManager.requestPermission()
+    }
+
     // MARK: - Public Methods
+
+    /// Move camera to current location
+    func moveToCurrentLocation() {
+        if let location = locationManager.currentLocation {
+            initialLocation = location
+            shouldMoveToLocation.toggle()
+            Logger.ui.info("📍 Moving to current location: \(location.latitude), \(location.longitude)")
+        } else {
+            // Request location if not available
+            locationManager.startUpdatingLocation()
+        }
+    }
 
     /// Called from NaverMapView when camera changes (only user-initiated)
     func handleCameraChange(center: CLLocationCoordinate2D,
