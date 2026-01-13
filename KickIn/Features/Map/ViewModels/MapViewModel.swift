@@ -20,10 +20,11 @@ final class MapViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var initialLocation: CLLocationCoordinate2D?
     @Published var shouldMoveToLocation = false
+    @Published var filterState: EstateFilter?
 
     // MARK: - Private Properties
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
-    private let clusteringService: ClusteringServiceProtocol
+    private let clusteringManager: ClusteringStrategyManager
     private let locationManager = LocationManager()
     private var cancellables = Set<AnyCancellable>()
 
@@ -31,8 +32,8 @@ final class MapViewModel: ObservableObject {
     private let cameraChangeSubject = PassthroughSubject<CameraChangeEvent, Never>()
 
     // MARK: - Initialization
-    init(clusteringService: ClusteringServiceProtocol = ClusteringService()) {
-        self.clusteringService = clusteringService
+    init(clusteringManager: ClusteringStrategyManager = ClusteringStrategyManager()) {
+        self.clusteringManager = clusteringManager
         setupDebounce()
         setupLocationObserver()
         requestLocationPermission()
@@ -218,43 +219,35 @@ final class MapViewModel: ObservableObject {
 
     // MARK: - Clustering
 
-    /// 클러스터링 수행 (줌 레벨 기반)
+    /// 클러스터링 수행 (하이브리드 전략 패턴)
     /// - Parameters:
     ///   - points: 클러스터링할 QuadPoint 배열
     ///   - maxDistance: 지도 반경 (미터)
     /// - Returns: ClusterResult
     private func performClustering(points: [QuadPoint], maxDistance: Int) async -> ClusterResult {
-        // 줌 레벨(반경)에 따른 적응형 epsilon과 minPoints
-        let epsilon = calculateAdaptiveEpsilon(maxDistance: maxDistance)
-        let minPoints = calculateAdaptiveMinPts(maxDistance: maxDistance)
-
-        // ClusteringService를 통해 클러스터링 수행
-        // 모든 줌 레벨에서 클러스터링을 수행하여:
-        // - 밀집 지역: 클러스터로 표시
-        // - 떨어진 점: 노이즈(개별 마커)로 표시
-        return await clusteringService.cluster(
-            points: points,
-            epsilon: epsilon,
-            minPoints: minPoints
+        // ClusteringContext 생성 (적응형 파라미터 자동 계산)
+        let context = ClusteringContext(
+            maxDistance: maxDistance,
+            dataSize: points.count,
+            filterState: filterState
         )
-    }
 
-    /// 줌 레벨(반경)에 따른 적응형 epsilon 계산
-    /// - Parameter maxDistance: 지도 반경 (미터)
-    /// - Returns: 적절한 epsilon 값 (미터)
-    private func calculateAdaptiveEpsilon(maxDistance: Int) -> Double {
-        // 줌 아웃할수록 (반경이 클수록) 큰 epsilon 사용 (넓은 범위 클러스터링)
-        // 줌 인할수록 (반경이 작을수록) 작은 epsilon 사용 (세밀한 클러스터링)
-        SpatialConstants.epsilon(forMaxDistance: maxDistance)
-    }
-    
-    /// 줌 레벨(반경)에 따른 적응형 minPts 계산
-    /// - Parameter maxDistance: 지도 반경 (미터)
-    /// - Returns: 적절한 minPts 값 (미터)
-    private func calculateAdaptiveMinPts(maxDistance: Int) -> Int {
-        // 줌 아웃할수록 (반경이 클수록) 큰 epsilon 사용 (넓은 범위 클러스터링)
-        // 줌 인할수록 (반경이 작을수록) 작은 epsilon 사용 (세밀한 클러스터링)
-        SpatialConstants.minPoints(forMaxDistance: maxDistance)
+        // ClusteringStrategyManager를 통해 전략 선택 및 클러스터링 수행
+        let result = await clusteringManager.cluster(points: points, context: context)
+
+        // Enhanced metrics 로깅
+        if let mode = result.mode, let executionTime = result.executionTime {
+            let modeName = mode == .gridBased ? "Grid-based" : "DBSCAN"
+            Logger.default.info("""
+            🎯 Clustering Complete:
+               Mode: \(modeName)
+               Clusters: \(result.clusterCount)
+               Noise: \(result.noise.count)
+               Time: \(String(format: "%.2f", executionTime * 1000))ms
+            """)
+        }
+
+        return result
     }
 }
 
