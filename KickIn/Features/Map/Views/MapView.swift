@@ -15,6 +15,27 @@ struct MapView: View {
             NaverMapView(viewModel: viewModel)
                 .ignoresSafeArea()
 
+            // Current location button (bottom right)
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        viewModel.moveToCurrentLocation()
+                    }) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Color.deepCoast)
+                            .clipShape(Circle())
+                            .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 100)
+                }
+            }
+
             // Loading indicator
             if viewModel.isLoading {
                 VStack {

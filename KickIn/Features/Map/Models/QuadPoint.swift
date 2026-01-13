@@ -12,7 +12,8 @@ struct QuadPoint {
     // 매물 id로 indexing
     let id: String
     let coordinate: CLLocationCoordinate2D
-    
+    let mapPoint: MapPoint? // For marker rendering
+
     var latitude: Double { coordinate.latitude }
     var longitude: Double { coordinate.longitude }
 }
