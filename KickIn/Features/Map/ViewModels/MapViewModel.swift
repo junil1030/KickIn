@@ -102,7 +102,10 @@ final class MapViewModel: ObservableObject {
 
             // Convert DTOs to MapPoint and QuadPoint
             let mapPoints = estates.compactMap { $0.toMapPoint() }
-            let quadPoints = estates.compactMap { $0.toQuadPoint() }
+            let quadPoints = estates.compactMap { estate in
+                let mapPoint = estate.toMapPoint()
+                return estate.toQuadPoint(with: mapPoint)
+            }
 
             // Perform clustering
             let clusterResult = await performClustering(points: quadPoints, maxDistance: event.maxDistance)
@@ -255,7 +258,7 @@ extension EstateLikeItemDTO {
     }
 
     /// Convert DTO to QuadPoint for clustering
-    func toQuadPoint() -> QuadPoint? {
+    func toQuadPoint(with mapPoint: MapPoint?) -> QuadPoint? {
         guard let estateId = estateId,
               let longitude = geolocation?.longitude,
               let latitude = geolocation?.latitude else {
@@ -264,7 +267,8 @@ extension EstateLikeItemDTO {
 
         return QuadPoint(
             id: estateId,
-            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+            mapPoint: mapPoint
         )
     }
 }
