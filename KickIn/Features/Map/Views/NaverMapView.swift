@@ -35,18 +35,41 @@ struct NaverMapView: UIViewRepresentable {
         private let viewModel: MapViewModel
         private var clusterMarkers: [NMFMarker] = []
         private var noiseMarkers: [NMFMarker] = []
+        private var markerPriceMap: [String: [NMFMarker]] = [:] // priceText -> markers
 
         init(viewModel: MapViewModel) {
             self.viewModel = viewModel
+            super.init()
+
+            // Listen for marker image load notifications
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleMarkerImageDidLoad(_:)),
+                name: .markerImageDidLoad,
+                object: nil
+            )
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
         }
 
         func updateClusters(_ clusters: [ClusterCenter], on mapView: NMFMapView) {
             clusterMarkers.forEach { $0.mapView = nil }
             clusterMarkers = clusters.map { cluster in
                 let marker = NMFMarker()
-                marker.position = NMGLatLng(lat: cluster.coordinate.latitude, lng: cluster.coordinate.longitude)
-                marker.captionText = "\(cluster.pointCount)"
-                marker.captionMinZoom = 0
+                marker.position = NMGLatLng(
+                    lat: cluster.coordinate.latitude,
+                    lng: cluster.coordinate.longitude
+                )
+
+                // Use cached custom cluster image
+                let clusterImage = MarkerImageCache.shared.clusterImage(count: cluster.pointCount)
+                marker.iconImage = NMFOverlayImage(image: clusterImage)
+
+                // Set anchor to center to prevent clipping
+                marker.anchor = CGPoint(x: 0.5, y: 0.5)
+
                 marker.mapView = mapView
                 return marker
             }
@@ -55,15 +78,64 @@ struct NaverMapView: UIViewRepresentable {
         func updateNoiseMarkers(_ noisePoints: [QuadPoint], on mapView: NMFMapView) {
             // 기존 노이즈 마커 제거
             noiseMarkers.forEach { $0.mapView = nil }
+            markerPriceMap.removeAll()
 
             // 새로운 노이즈 마커 생성 (개별 마커로 표시)
-            noiseMarkers = noisePoints.map { point in
+            noiseMarkers = noisePoints.compactMap { point in
+                // Use MapPoint reference (added in QuadPoint)
+                guard let mapPoint = point.mapPoint else { return nil }
+
                 let marker = NMFMarker()
-                marker.position = NMGLatLng(lat: point.coordinate.latitude, lng: point.coordinate.longitude)
-                // 기본 마커 사용 (클러스터와 구별되도록)
-                marker.iconTintColor = UIColor.systemBlue
+                marker.position = NMGLatLng(
+                    lat: point.coordinate.latitude,
+                    lng: point.coordinate.longitude
+                )
+
+                // Format price
+                let priceText = PriceFormatter.formatForMarker(
+                    deposit: mapPoint.deposit,
+                    monthlyRent: mapPoint.monthly_rent
+                )
+
+                // Use cached custom estate image
+                let estateImage = MarkerImageCache.shared.estateImage(
+                    priceText: priceText,
+                    imageURL: mapPoint.imageURL
+                )
+                marker.iconImage = NMFOverlayImage(image: estateImage)
+
+                // Set anchor to center to prevent clipping
+                marker.anchor = CGPoint(x: 0.5, y: 0.5)
+
                 marker.mapView = mapView
+
+                // Track marker by price for later updates
+                if markerPriceMap[priceText] == nil {
+                    markerPriceMap[priceText] = []
+                }
+                markerPriceMap[priceText]?.append(marker)
+
                 return marker
+            }
+        }
+
+        // Handle marker image loaded notification
+        @objc private func handleMarkerImageDidLoad(_ notification: Notification) {
+            guard let priceText = notification.userInfo?["priceText"] as? String,
+                  let markers = markerPriceMap[priceText] else {
+                return
+            }
+
+            // Update markers with newly loaded image on main thread
+            Task { @MainActor in
+                let updatedImage = MarkerImageCache.shared.estateImage(
+                    priceText: priceText,
+                    imageURL: nil // Already cached, will return cached image
+                )
+
+                for marker in markers {
+                    marker.iconImage = NMFOverlayImage(image: updatedImage)
+                }
             }
         }
 
