@@ -8,6 +8,15 @@
 import Foundation
 import CoreLocation
 
+/// 클러스터링 모드
+enum ClusteringMode {
+    /// Grid-based 클러스터링 (QuadTree 기반, O(n) 복잡도)
+    case gridBased
+
+    /// Density-based 클러스터링 (DBSCAN, O(n log n) 복잡도)
+    case densityBased
+}
+
 /// DBSCAN 클러스터링 결과
 struct ClusterResult {
     /// 클러스터 그룹들 (각 그룹은 QuadPoint 배열)
@@ -15,6 +24,40 @@ struct ClusterResult {
 
     /// 노이즈 점들 (어떤 클러스터에도 속하지 않는 점)
     let noise: [QuadPoint]
+
+    /// 클러스터링 모드 (선택적, 전략 패턴용)
+    let mode: ClusteringMode?
+
+    /// 실행 시간 (초 단위, 선택적)
+    let executionTime: TimeInterval?
+
+    /// 전략 선택 이유 (선택적)
+    let reason: String?
+
+    // MARK: - Initializers
+
+    /// Enhanced initializer (전략 패턴용)
+    /// - Parameters:
+    ///   - clusters: 클러스터 그룹들
+    ///   - noise: 노이즈 점들
+    ///   - mode: 클러스터링 모드
+    ///   - executionTime: 실행 시간 (초)
+    ///   - reason: 전략 선택 이유
+    init(
+        clusters: [[QuadPoint]],
+        noise: [QuadPoint],
+        mode: ClusteringMode? = nil,
+        executionTime: TimeInterval? = nil,
+        reason: String? = nil
+    ) {
+        self.clusters = clusters
+        self.noise = noise
+        self.mode = mode
+        self.executionTime = executionTime
+        self.reason = reason
+    }
+
+    // MARK: - Computed Properties
 
     /// 클러스터 개수
     var clusterCount: Int {
