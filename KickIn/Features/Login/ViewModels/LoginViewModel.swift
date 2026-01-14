@@ -157,6 +157,11 @@ final class LoginViewModel: ObservableObject {
                 await tokenStorage.setAccessToken(accessToken)
                 await tokenStorage.setRefreshToken(refreshToken)
                 await tokenStorage.setUserId(userId)
+
+                NetworkServiceFactory.shared.updateCredential(
+                    accessToken: accessToken,
+                    refreshToken: refreshToken
+                )
                 // 저장 확인
                 if let savedUserId = await tokenStorage.getUserId() {
                     Logger.auth.info("✅ User ID successfully saved to Keychain: \(savedUserId)")
