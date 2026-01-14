@@ -32,8 +32,16 @@ struct NaverMapView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: NMFNaverMapView, context: Context) {
+        // Extract all state once to minimize AttributeGraph evaluations
+        let currentState = (
+            clusters: viewModel.state.clusters,
+            noisePoints: viewModel.state.noisePoints,
+            initialLocation: viewModel.initialLocation,
+            shouldMoveToLocation: viewModel.shouldMoveToLocation
+        )
+
         // Update initial location if changed and not yet set
-        if let initialLocation = viewModel.initialLocation,
+        if let initialLocation = currentState.initialLocation,
            !context.coordinator.hasSetInitialLocation {
             let cameraUpdate = NMFCameraUpdate(scrollTo: NMGLatLng(
                 lat: initialLocation.latitude,
@@ -46,8 +54,8 @@ struct NaverMapView: UIViewRepresentable {
         }
 
         // Handle move to location button tap
-        if viewModel.shouldMoveToLocation != context.coordinator.lastMoveToLocationTrigger,
-           let initialLocation = viewModel.initialLocation {
+        if currentState.shouldMoveToLocation != context.coordinator.lastMoveToLocationTrigger,
+           let initialLocation = currentState.initialLocation {
             let cameraUpdate = NMFCameraUpdate(scrollTo: NMGLatLng(
                 lat: initialLocation.latitude,
                 lng: initialLocation.longitude
@@ -55,11 +63,22 @@ struct NaverMapView: UIViewRepresentable {
             cameraUpdate.animation = .easeIn
             cameraUpdate.animationDuration = 0.5
             uiView.mapView.moveCamera(cameraUpdate)
-            context.coordinator.lastMoveToLocationTrigger = viewModel.shouldMoveToLocation
+            context.coordinator.lastMoveToLocationTrigger = currentState.shouldMoveToLocation
         }
 
-        context.coordinator.updateClusters(viewModel.clusters, on: uiView.mapView)
-        context.coordinator.updateNoiseMarkers(viewModel.noisePoints, on: uiView.mapView)
+        // Only update markers if count changed (prevents AttributeGraph cycles)
+        let currentClusterCount = currentState.clusters.count
+        let currentNoiseCount = currentState.noisePoints.count
+
+        if currentClusterCount != context.coordinator.lastClusterCount {
+            context.coordinator.updateClusters(currentState.clusters, on: uiView.mapView)
+            context.coordinator.lastClusterCount = currentClusterCount
+        }
+
+        if currentNoiseCount != context.coordinator.lastNoiseCount {
+            context.coordinator.updateNoiseMarkers(currentState.noisePoints, on: uiView.mapView)
+            context.coordinator.lastNoiseCount = currentNoiseCount
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -74,6 +93,10 @@ struct NaverMapView: UIViewRepresentable {
         private var markerPriceMap: [String: [NMFMarker]] = [:] // priceText -> markers
         var hasSetInitialLocation = false
         var lastMoveToLocationTrigger = false
+
+        // Cache to prevent unnecessary updates
+        fileprivate var lastClusterCount = 0
+        fileprivate var lastNoiseCount = 0
 
         init(viewModel: MapViewModel) {
             self.viewModel = viewModel

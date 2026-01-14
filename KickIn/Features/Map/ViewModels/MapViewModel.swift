@@ -10,14 +10,19 @@ import Combine
 import CoreLocation
 import OSLog
 
+/// Consolidated map state for atomic updates
+struct MapState {
+    var mapPoints: [MapPoint] = []
+    var quadPoints: [QuadPoint] = []
+    var clusters: [ClusterCenter] = []
+    var noisePoints: [QuadPoint] = []
+    var isLoading = false
+    var errorMessage: String?
+}
+
 final class MapViewModel: ObservableObject {
     // MARK: - Published Properties
-    @Published var mapPoints: [MapPoint] = []
-    @Published var quadPoints: [QuadPoint] = []
-    @Published var clusters: [ClusterCenter] = []
-    @Published var noisePoints: [QuadPoint] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+    @Published private(set) var state = MapState()
     @Published var initialLocation: CLLocationCoordinate2D?
     @Published var shouldMoveToLocation = false
     @Published var filterState: EstateFilter?
@@ -54,6 +59,7 @@ final class MapViewModel: ObservableObject {
     private func setupLocationObserver() {
         locationManager.$currentLocation
             .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] location in
                 self?.initialLocation = location
                 Logger.ui.info("📍 Initial location set: \(location.latitude), \(location.longitude)")
@@ -115,12 +121,17 @@ final class MapViewModel: ObservableObject {
 
     /// Fetch nearby estates from API
     private func fetchNearbyEstates(event: CameraChangeEvent) async {
+        let pipelineStartTime = CFAbsoluteTimeGetCurrent()
+
         await MainActor.run {
-            isLoading = true
-            errorMessage = nil
+            var loadingState = self.state
+            loadingState.isLoading = true
+            loadingState.errorMessage = nil
+            self.state = loadingState
         }
 
         do {
+            let apiRequestStartTime = CFAbsoluteTimeGetCurrent()
             let response: EstateGeolocationResponseDTO = try await networkService.request(
                 EstateRouter.geolocation(
                     category: nil,
@@ -129,6 +140,7 @@ final class MapViewModel: ObservableObject {
                     maxDistance: event.maxDistance
                 )
             )
+            let apiRequestTime = CFAbsoluteTimeGetCurrent() - apiRequestStartTime
 
             let estates = response.data ?? []
 
@@ -142,13 +154,28 @@ final class MapViewModel: ObservableObject {
             // Perform clustering
             let clusterResult = await performClustering(points: quadPoints, maxDistance: event.maxDistance)
 
+            // 마커 렌더링 시간 측정 시작
+            let markerRenderStartTime = CFAbsoluteTimeGetCurrent()
+
+            // Atomic state update: Single objectWillChange notification
             await MainActor.run {
-                self.mapPoints = mapPoints
-                self.quadPoints = quadPoints
-                self.clusters = clusterResult.clusterCenters()
-                self.noisePoints = clusterResult.noise
-                self.isLoading = false
+                var newState = MapState()
+                newState.mapPoints = mapPoints
+                newState.quadPoints = quadPoints
+                newState.clusters = clusterResult.clusterCenters()
+                newState.noisePoints = clusterResult.noise
+                newState.isLoading = false
+                newState.errorMessage = nil
+                self.state = newState
             }
+
+            let markerRenderTime = CFAbsoluteTimeGetCurrent() - markerRenderStartTime
+            let totalPipelineTime = CFAbsoluteTimeGetCurrent() - pipelineStartTime
+            
+            Logger.network.info("""
+            ⏳ EstateGeolocationResponse Success:
+                Total Time: \(String(format: "%.2f", apiRequestTime * 1000))ms
+            """)
 
             Logger.network.info("""
             ✅ Geolocation API Success:
@@ -157,6 +184,14 @@ final class MapViewModel: ObservableObject {
                Results: \(estates.count) estates
                MapPoints: \(mapPoints.count), QuadPoints: \(quadPoints.count)
                Clusters: \(clusterResult.clusterCount), Noise: \(clusterResult.noise.count)
+            """)
+
+            Logger.default.info("""
+            🖼️ Marker Rendering Performance:
+               UI Update Time: \(String(format: "%.2f", markerRenderTime * 1000))ms
+               Total Pipeline Time: \(String(format: "%.2f", totalPipelineTime * 1000))ms
+               Cluster Markers: \(clusterResult.clusterCount)
+               Individual Markers: \(clusterResult.noise.count)
             """)
 
             // Log individual results for debugging
@@ -177,14 +212,18 @@ final class MapViewModel: ObservableObject {
         } catch let error as NetworkError {
             Logger.network.error("❌ Geolocation API Failed: \(error.localizedDescription)")
             await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
+                var errorState = self.state
+                errorState.isLoading = false
+                errorState.errorMessage = error.localizedDescription
+                self.state = errorState
             }
         } catch {
             Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
             await MainActor.run {
-                self.errorMessage = "주변 매물을 불러오는데 실패했습니다."
-                self.isLoading = false
+                var errorState = self.state
+                errorState.isLoading = false
+                errorState.errorMessage = "주변 매물을 불러오는데 실패했습니다."
+                self.state = errorState
             }
         }
     }
