@@ -10,6 +10,7 @@ import OSLog
 import Firebase
 import FirebaseMessaging
 import iamport_ios
+import RealmSwift
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     
@@ -17,7 +18,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private let paymentViewModel = PaymentViewModel()
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        
+
+        // Realm 초기화
+        configureRealm()
+
         // Firebase 초기화
         FirebaseApp.configure()
         
@@ -66,6 +70,27 @@ extension AppDelegate: MessagingDelegate {
         
         Task {
             await tokenStorage.setFCMToken(fcmToken)
+        }
+    }
+}
+
+// MARK: - Realm Configuration
+extension AppDelegate {
+    private func configureRealm() {
+        let schemaVersion: UInt64 = 1
+
+        let config = Realm.Configuration(
+            schemaVersion: schemaVersion,
+            migrationBlock: { migration, oldSchemaVersion in
+                if oldSchemaVersion < 1 {}
+            }
+        )
+
+        Realm.Configuration.defaultConfiguration = config
+
+        // Realm 파일 저장 위치 로그
+        if let realmURL = config.fileURL {
+            Logger.database.info("📁 Realm 저장 위치: \(realmURL.path)")
         }
     }
 }
