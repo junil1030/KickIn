@@ -72,12 +72,16 @@ enum SpatialConstants {
     /// - Returns: QuadTree grid depth (1~10)
     static func gridDepth(forMaxDistance distance: Int) -> Int {
         switch distance {
-        case 0..<500:        return 10  // Very zoomed in
-        case 500..<1000:     return 8
-        case 1000..<3000:    return 6
-        case 3000..<10000:   return 4
-        case 10000..<50000:  return 2
+        case 0..<500:        return 4  // Very zoomed in
+        case 500..<1000:     return 3
+        case 1000..<3000:    return 2
+        case 3000..<10000:   return 1
+        case 10000..<50000:  return 1
         default:             return 1   // Very zoomed out
         }
     }
+
+    /// Jitter factor for grid-based clustering (7.5%)
+    /// Applied as percentage of grid cell size to break up visual grid patterns
+    static let gridJitterFactor: Double = 0.075
 }

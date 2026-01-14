@@ -48,9 +48,9 @@ final class GridClusteringStrategy: ClusteringStrategy {
         """)
 
         // Task.detached로 백그라운드 실행
-        let result = await Task.detached(priority: .userInitiated) { [weak self] in
+        let (clusters, noise, cellSize) = await Task.detached(priority: .userInitiated) { [weak self] in
             guard let self = self else {
-                return ClusterResult(clusters: [], noise: [])
+                return ([[QuadPoint]](), [QuadPoint](), 0.0)
             }
             return await self.performGridClustering(
                 points: points,
@@ -63,17 +63,19 @@ final class GridClusteringStrategy: ClusteringStrategy {
 
         Logger.default.info("""
         🔲 Grid Clustering Complete:
-           Clusters: \(result.clusterCount)
+           Clusters: \(clusters.count)
+           Cell Size: \(String(format: "%.2f", cellSize))
            Time: \(String(format: "%.2f", elapsed * 1000))ms
         """)
 
         // Enhanced ClusterResult 반환
         return ClusterResult(
-            clusters: result.clusters,
-            noise: result.noise,
+            clusters: clusters,
+            noise: noise,
             mode: .gridBased,
             executionTime: elapsed,
-            reason: "Grid-based for large dataset"
+            reason: "Grid-based for large dataset",
+            gridCellSize: cellSize
         )
     }
 
@@ -84,12 +86,12 @@ final class GridClusteringStrategy: ClusteringStrategy {
     ///   - points: 클러스터링할 점들
     ///   - targetDepth: Grid depth (1~10)
     ///   - maxDistance: 지도 반경 (미터)
-    /// - Returns: ClusterResult
+    /// - Returns: Tuple of (clusters, noise, cellSize)
     private func performGridClustering(
         points: [QuadPoint],
         targetDepth: Int,
         maxDistance: Int
-    ) async -> ClusterResult {
+    ) async -> (clusters: [[QuadPoint]], noise: [QuadPoint], cellSize: Double) {
         // 1. QuadTree 구축
         let quadTree = QuadTree(points: points)
         let bounds = quadTree.boundary
@@ -130,6 +132,6 @@ final class GridClusteringStrategy: ClusteringStrategy {
         }
 
         // Grid-based는 노이즈 없음 (모든 점이 클러스터에 포함)
-        return ClusterResult(clusters: clusters, noise: [])
+        return (clusters, [], cellSize)
     }
 }

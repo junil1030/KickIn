@@ -8,6 +8,21 @@
 import Foundation
 import CoreLocation
 
+/// Seeded random number generator for deterministic jitter
+fileprivate struct SeededRandomGenerator: RandomNumberGenerator {
+    private var seed: UInt64
+
+    init(seed: Int) {
+        self.seed = UInt64(bitPattern: Int64(seed))
+    }
+
+    mutating func next() -> UInt64 {
+        // Linear Congruential Generator (LCG)
+        seed = (seed &* 6364136223846793005) &+ 1442695040888963407
+        return seed
+    }
+}
+
 /// 클러스터링 모드
 enum ClusteringMode {
     /// Grid-based 클러스터링 (QuadTree 기반, O(n) 복잡도)
@@ -34,6 +49,9 @@ struct ClusterResult {
     /// 전략 선택 이유 (선택적)
     let reason: String?
 
+    /// Grid cell 크기 (Grid-based 클러스터링용, 선택적)
+    let gridCellSize: Double?
+
     // MARK: - Initializers
 
     /// Enhanced initializer (전략 패턴용)
@@ -48,13 +66,15 @@ struct ClusterResult {
         noise: [QuadPoint],
         mode: ClusteringMode? = nil,
         executionTime: TimeInterval? = nil,
-        reason: String? = nil
+        reason: String? = nil,
+        gridCellSize: Double? = nil
     ) {
         self.clusters = clusters
         self.noise = noise
         self.mode = mode
         self.executionTime = executionTime
         self.reason = reason
+        self.gridCellSize = gridCellSize
     }
 
     // MARK: - Computed Properties
@@ -82,7 +102,11 @@ struct ClusterResult {
     /// - Returns: ClusterCenter 배열
     func clusterCenters() -> [ClusterCenter] {
         return clusters.map { cluster in
-            ClusterCenter(points: cluster)
+            ClusterCenter(
+                points: cluster,
+                mode: mode,
+                gridCellSize: gridCellSize
+            )
         }
     }
 }
@@ -99,8 +123,15 @@ struct ClusterCenter {
     let pointIds: [String]
 
     /// QuadPoint 배열로부터 중심점 계산
-    /// - Parameter points: 클러스터를 구성하는 점들
-    init(points: [QuadPoint]) {
+    /// - Parameters:
+    ///   - points: 클러스터를 구성하는 점들
+    ///   - mode: 클러스터링 모드 (선택적)
+    ///   - gridCellSize: Grid cell 크기 (선택적, Grid-based 전용)
+    init(
+        points: [QuadPoint],
+        mode: ClusteringMode? = nil,
+        gridCellSize: Double? = nil
+    ) {
         guard !points.isEmpty else {
             self.coordinate = CLLocationCoordinate2D(latitude: 0, longitude: 0)
             self.pointCount = 0
@@ -112,7 +143,33 @@ struct ClusterCenter {
         let avgLat = points.map { $0.latitude }.reduce(0, +) / Double(points.count)
         let avgLon = points.map { $0.longitude }.reduce(0, +) / Double(points.count)
 
-        self.coordinate = CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon)
+        // Apply jitter only for grid-based clustering
+        let finalLat: Double
+        let finalLon: Double
+
+        if mode == .gridBased, let cellSize = gridCellSize {
+            // Deterministic seed from cluster point IDs
+            let sortedIds = points.map { $0.id }.sorted().joined()
+            let seed = sortedIds.hashValue
+            var generator = SeededRandomGenerator(seed: seed)
+
+            // Jitter amount: 7.5% of grid cell size
+            let jitterFactor = SpatialConstants.gridJitterFactor
+            let jitterAmount = cellSize * jitterFactor
+
+            // Apply random offset within ±jitterAmount
+            let latOffset = Double.random(in: -jitterAmount...jitterAmount, using: &generator)
+            let lonOffset = Double.random(in: -jitterAmount...jitterAmount, using: &generator)
+
+            finalLat = avgLat + latOffset
+            finalLon = avgLon + lonOffset
+        } else {
+            // No jitter for DBSCAN or when cellSize unavailable
+            finalLat = avgLat
+            finalLon = avgLon
+        }
+
+        self.coordinate = CLLocationCoordinate2D(latitude: finalLat, longitude: finalLon)
         self.pointCount = points.count
         self.pointIds = points.map { $0.id }
     }
