@@ -97,7 +97,7 @@ final class EstateDetailViewModel: ObservableObject {
                 )
             }
 
-            Logger.network.info("✅ Created order for estate ID: \(self.estateId)")
+            Logger.network.info("✅ Created order for estate ID: \(self.estateId), orderCode: \(orderCode)")
         } catch let error as NetworkError {
             Logger.network.error("❌ Failed to create order: \(error.localizedDescription)")
             await MainActor.run {
