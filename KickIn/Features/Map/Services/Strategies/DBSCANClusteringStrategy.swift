@@ -63,13 +63,6 @@ final class DBSCANClusteringStrategy: ClusteringStrategy {
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
 
-        Logger.default.info("""
-        🔍 DBSCAN Clustering Complete:
-           Clusters: \(basicResult.clusterCount)
-           Noise: \(basicResult.noise.count)
-           Time: \(String(format: "%.2f", elapsed * 1000))ms
-        """)
-
         // Enhanced ClusterResult 반환
         return ClusterResult(
             clusters: basicResult.clusters,
