@@ -45,14 +45,14 @@ final class AuthenticationInterceptor: RequestInterceptor {
         completion: @escaping (RetryResult) -> Void
     ) {
         Task {
-            await Logger.network.debug("Retry flow started")
+            Logger.network.debug("Retry flow started")
             guard let response = request.task?.response as? HTTPURLResponse else {
-                await Logger.network.debug("Retry check: missing HTTPURLResponse")
+                Logger.network.debug("Retry check: missing HTTPURLResponse")
                 completion(.doNotRetry)
                 return
             }
 
-            await Logger.network.debug("Retry check status: \(response.statusCode)")
+            Logger.network.debug("Retry check status: \(response.statusCode)")
 
             // Check if error is 401 Unauthorized or 419 Token Expired
             guard response.statusCode == 401 || response.statusCode == 419 else {
@@ -60,13 +60,13 @@ final class AuthenticationInterceptor: RequestInterceptor {
                 return
             }
 
-            await Logger.network.info("Token expired detected")
-            await Logger.network.debug("Token refresh triggered")
+            Logger.network.info("Token expired detected")
+            Logger.network.debug("Token refresh triggered")
 
             // Get refresh token
             guard let refreshToken = await tokenStorage.getRefreshToken() else {
                 // No refresh token available, logout
-                await Logger.network.error("Token refresh failed: missing refresh token")
+                Logger.network.error("Token refresh failed: missing refresh token")
                 await handleLogout()
                 completion(.doNotRetry)
                 return
@@ -74,7 +74,7 @@ final class AuthenticationInterceptor: RequestInterceptor {
 
             do {
                 // Attempt to refresh token (synchronized via actor)
-                await Logger.network.debug("Token refresh request started")
+                Logger.network.debug("Token refresh request started")
                 let refreshResponse = try await refreshManager.refreshToken(
                     using: refreshToken,
                     refreshHandler: { [weak self] refreshToken in
@@ -86,7 +86,7 @@ final class AuthenticationInterceptor: RequestInterceptor {
                 )
 
                 guard let newAccessToken = refreshResponse.accessToken else {
-                    await Logger.network.error("Token refresh failed: missing access token")
+                    Logger.network.error("Token refresh failed: missing access token")
                     await handleLogout()
                     completion(.doNotRetry)
                     return
@@ -98,14 +98,14 @@ final class AuthenticationInterceptor: RequestInterceptor {
                     await tokenStorage.setRefreshToken(newRefreshToken)
                 }
 
-                await Logger.network.info("Token refresh succeeded: accessToken=\(newAccessToken)")
-                await Logger.network.info("Token refresh succeeded: refreshToken=\(refreshResponse.refreshToken ?? "nil")")
+                Logger.network.info("Token refresh succeeded: accessToken=\(newAccessToken)")
+                Logger.network.info("Token refresh succeeded: refreshToken=\(refreshResponse.refreshToken ?? "nil")")
 
                 // Retry the original request
                 completion(.retry)
             } catch {
                 // Refresh failed, logout
-                await Logger.network.error("Token refresh failed: \(error.localizedDescription)")
+                Logger.network.error("Token refresh failed: \(error.localizedDescription)")
                 await handleLogout()
                 completion(.doNotRetry)
             }
@@ -118,7 +118,7 @@ final class AuthenticationInterceptor: RequestInterceptor {
         // Create refresh token request
         let router = UserRouter.refreshToken(token: refreshToken)
 
-        guard var urlRequest = try? await router.asURLRequest() else {
+        guard var urlRequest = try? router.asURLRequest() else {
             throw NetworkError.invalidURL
         }
 
@@ -126,14 +126,14 @@ final class AuthenticationInterceptor: RequestInterceptor {
             urlRequest.setValue(accessToken, forHTTPHeaderField: "Authorization")
         }
 
-        await Logger.network.debug("Token refresh request URL: \(urlRequest.url?.absoluteString ?? "nil")")
-        await Logger.network.debug("Token refresh request headers: \(urlRequest.headers.dictionary)")
+        Logger.network.debug("Token refresh request URL: \(urlRequest.url?.absoluteString ?? "nil")")
+        Logger.network.debug("Token refresh request headers: \(urlRequest.headers.dictionary)")
 
         // Perform network request
         let (data, response) = try await URLSession.shared.data(for: urlRequest)
 
         if let bodyString = String(data: data, encoding: .utf8) {
-            await Logger.network.debug("Token refresh response data: \(bodyString)")
+            Logger.network.debug("Token refresh response data: \(bodyString)")
         }
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -141,7 +141,7 @@ final class AuthenticationInterceptor: RequestInterceptor {
         }
 
         guard httpResponse.statusCode == 200 else {
-            await Logger.network.error("Token refresh response status: \(httpResponse.statusCode)")
+            Logger.network.error("Token refresh response status: \(httpResponse.statusCode)")
             throw NetworkError.unauthorized
         }
 
@@ -149,7 +149,7 @@ final class AuthenticationInterceptor: RequestInterceptor {
         let decoder = JSONDecoder()
         let refreshResponse = try decoder.decode(RefreshTokenResponseDTO.self, from: data)
 
-        await Logger.network.info("Token refresh response decoded")
+        Logger.network.info("Token refresh response decoded")
         return refreshResponse
     }
 
