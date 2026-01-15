@@ -8,7 +8,7 @@
 import Foundation
 import RealmSwift
 
-final class ChatMessageObject: Object {
+final class ChatMessageObject: Object, Identifiable {
     @Persisted(primaryKey: true) var chatId: String
     @Persisted(indexed: true) var roomId: String
     @Persisted var content: String?

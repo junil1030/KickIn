@@ -14,7 +14,9 @@ import UIKit
 final class ChatDetailViewModel: ObservableObject {
     // MARK: - Published Properties
 
-    @Published var chatItems: [ChatItem] = []  // UI 렌더링용 (날짜 헤더 + 메시지)
+    /// @ObservedResults 기반 메시지 Observer (자동 UI 업데이트)
+    @Published private(set) var messagesObserver: ChatMessagesObserver?
+
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var hasMoreData = true
@@ -30,8 +32,6 @@ final class ChatDetailViewModel: ObservableObject {
     private var myNickname: String = ""
     private var myProfileImage: String?
 
-    private var messages: [ChatMessageUIModel] = []  // 내부 데이터용
-
     // Sync Coordinator
     @Published private(set) var syncState: SyncState = .idle
     private var syncCoordinator: MessageSyncCoordinator?
@@ -44,6 +44,14 @@ final class ChatDetailViewModel: ObservableObject {
 
     private var connectionTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
+    private var observerCancellable: AnyCancellable?
+
+    // MARK: - Computed Properties
+
+    /// View에서 사용할 chatItems (@ObservedResults 기반)
+    var displayedChatItems: [ChatItem] {
+        messagesObserver?.chatItems ?? []
+    }
 
     // MARK: - Initialization
 
@@ -62,8 +70,24 @@ final class ChatDetailViewModel: ObservableObject {
     }
 
     deinit {
+        // deinit은 nonisolated이므로 Task 취소만 수행
         connectionTask?.cancel()
         messageTask?.cancel()
+        observerCancellable?.cancel()
+    }
+
+    // MARK: - Cleanup
+
+    /// 리소스 정리 (View의 onDisappear에서 호출)
+    func cleanup() {
+        connectionTask?.cancel()
+        messageTask?.cancel()
+        observerCancellable?.cancel()
+        messagesObserver?.invalidateObservation()
+        socketService.disconnect()
+        connectionTask = nil
+        messageTask = nil
+        observerCancellable = nil
     }
 
     // MARK: - Public Methods
@@ -75,12 +99,13 @@ final class ChatDetailViewModel: ObservableObject {
         // 내 정보 조회
         myUserId = await tokenStorage.getUserId() ?? ""
 
-        do {
-            // 1. Realm에서 로컬 메시지 로드 (즉시 표시)
-            messages = try await repository.fetchMessagesAsUIModels(roomId: roomId, limit: 50, beforeDate: nil)
-            updateChatItems()
+        // @ObservedResults 기반 Observer 초기화 (자동으로 로컬 메시지 로드)
+        messagesObserver = ChatMessagesObserver(roomId: roomId)
+        setupObserverSubscription()
+        Logger.chat.info("📡 [ChatDetailViewModel] ChatMessagesObserver initialized for room: \(self.roomId)")
 
-            // 2. Coordinator 초기화
+        do {
+            // Coordinator 초기화
             syncCoordinator = MessageSyncCoordinator(
                 repository: repository,
                 networkService: networkService,
@@ -104,14 +129,11 @@ final class ChatDetailViewModel: ObservableObject {
 
             Logger.chat.info("✅ Socket connected, starting sync via Coordinator")
 
-            // 6. 동기화 시작 (Exponential Backoff 포함)
+            // 동기화 시작 (Exponential Backoff 포함)
+            // @ObservedResults가 Realm 변경을 자동 감지하여 UI 업데이트
             try await syncCoordinator?.startSync()
 
-            // 7. UI 갱신
-            messages = try await repository.fetchMessagesAsUIModels(roomId: roomId, limit: 50, beforeDate: nil)
-            updateChatItems()
-
-            Logger.chat.info("✅ Initial load complete: \(self.messages.count) messages for room \(self.roomId)")
+            Logger.chat.info("✅ Initial load complete for room \(self.roomId)")
 
         } catch let error as NetworkError {
             Logger.chat.error("❌ Failed to load messages: \(error.localizedDescription)")
@@ -132,8 +154,13 @@ final class ChatDetailViewModel: ObservableObject {
 
         isLoadingMore = true
 
-        let oldestMessage = messages.last
-        let cursor = oldestMessage?.createdAt
+        // Observer의 chatItems에서 가장 오래된 메시지의 cursor 추출
+        let cursor = displayedChatItems
+            .compactMap { item -> String? in
+                guard case .message(let config) = item else { return nil }
+                return config.message.createdAt
+            }
+            .last  // displayedChatItems는 최신순이므로 last가 가장 오래된 메시지
 
         do {
             let response: ChatMessagesResponseDTO = try await networkService.request(
@@ -146,22 +173,12 @@ final class ChatDetailViewModel: ObservableObject {
                 return
             }
 
-            // Realm에 저장 (DTO를 직접 Repository에 전달)
+            // Realm에 저장 → @ObservedResults가 자동으로 UI 업데이트
             for messageDTO in newMessages {
                 try await repository.saveMessageFromDTO(messageDTO, myUserId: myUserId)
             }
 
-            // UI 업데이트 - Repository에서 UIModel로 변환해서 가져오기
-            let newUIModels = try await repository.fetchMessagesAsUIModels(
-                roomId: roomId,
-                limit: newMessages.count,
-                beforeDate: cursor
-            )
-            messages.append(contentsOf: newUIModels)
             hasMoreData = newMessages.count >= 50
-
-            // chatItems 업데이트
-            updateChatItems()
 
             Logger.chat.info("📥 Loaded \(newMessages.count) more messages")
 
@@ -238,13 +255,10 @@ final class ChatDetailViewModel: ObservableObject {
         // 5. Connect socket
         await socketService.connect(roomID: roomId)
 
-        // 6. Start sync via Coordinator
+        // Start sync via Coordinator
+        // @ObservedResults가 Realm 변경을 자동 감지하여 UI 업데이트
         do {
             try await syncCoordinator?.startSync()
-
-            // 7. UI 갱신
-            messages = try await repository.fetchMessagesAsUIModels(roomId: roomId, limit: 50, beforeDate: nil)
-            updateChatItems()
         } catch {
             Logger.chat.error("❌ [ChatDetailViewModel] Reconnection sync failed: \(error)")
         }
@@ -254,58 +268,18 @@ final class ChatDetailViewModel: ObservableObject {
 
     // MARK: - Private Methods
 
-    /// messages 배열을 chatItems로 변환 (날짜 헤더 자동 삽입 + displayConfig 계산)
-    private func updateChatItems() {
-        var items: [ChatItem] = []
+    /// 실시간으로 수신한 메시지 처리 (Realm 저장만, UI는 @ObservedResults가 처리)
+    private func handleReceivedMessage(_ messageDTO: ChatMessageItemDTO) async {
+        let chatId = messageDTO.chatId ?? ""
+        Logger.chat.info("📬 [ChatDetailViewModel] Handling received message: \(chatId)")
 
-        // messages는 최신순 (index 0 = 최신, index n = 오래된)
-        for (index, message) in messages.enumerated() {
-            let currentDateKey = message.createdAt.toDateKey()
-            let nextMessage = index < messages.count - 1 ? messages[index + 1] : nil
-            let nextDateKey = nextMessage?.createdAt.toDateKey()
-
-            // MessageDisplayConfig 계산
-            // previous = 시간상 이전 메시지 (더 오래된 메시지, index + 1)
-            // next = 시간상 다음 메시지 (더 최신 메시지, index - 1)
-            let previous = index < messages.count - 1 ? messages[index + 1] : nil
-            let next = index > 0 ? messages[index - 1] : nil
-            let config = MessageDisplayConfig.create(message: message, previous: previous, next: next, roomId: roomId)
-
-            // 메시지 먼저 추가
-            items.append(.message(config: config))
-
-            // 다음 메시지와 날짜가 다르면 (현재 메시지가 이 날짜의 첫 메시지)
-            // 또는 마지막 메시지인 경우 (가장 오래된 메시지)
-            if let currentDateKey = currentDateKey {
-                if nextDateKey != currentDateKey || index == messages.count - 1 {
-                    // 날짜 헤더 추가 (reversed 후 메시지 위에 표시됨)
-                    if let header = message.createdAt.toChatSectionHeader() {
-                        items.append(.dateHeader(date: currentDateKey, dateFormatted: header))
-                    }
-                }
-            }
+        // 중복 체크 (displayedChatItems에서 확인)
+        let messageExists = displayedChatItems.contains { item in
+            guard case .message(let config) = item else { return false }
+            return config.message.id == chatId
         }
 
-        chatItems = items
-        extractMediaFromMessages()
-    }
-
-    /// 메시지에서 미디어 아이템 추출 (톡서랍용)
-    private func extractMediaFromMessages() {
-        allMediaItems = messages
-            .flatMap { $0.mediaItems(roomId: roomId) }
-            .sorted { $0.createdAt > $1.createdAt }  // 최신순 정렬
-
-        Logger.chat.info("📸 [ChatDetailViewModel] Extracted \(self.allMediaItems.count) media items from \(self.messages.count) messages")
-    }
-
-    /// 실시간으로 수신한 메시지 처리 (중복 체크 포함)
-    private func handleReceivedMessage(_ messageDTO: ChatMessageItemDTO) async {
-        Logger.chat.info("📬 [ChatDetailViewModel] Handling received message: \(messageDTO.chatId ?? "unknown")")
-
-        // 중복 체크
-        let chatId = messageDTO.chatId ?? ""
-        if messages.contains(where: { $0.id == chatId }) {
+        if messageExists {
             Logger.chat.info("⚠️ [ChatDetailViewModel] Message already exists, skipping: \(chatId)")
             return
         }
@@ -316,28 +290,13 @@ final class ChatDetailViewModel: ObservableObject {
             return
         }
 
-        // Realm에 저장
+        // Realm에 저장 → @ObservedResults가 자동으로 UI 업데이트
         try? await repository.saveMessageFromDTO(messageDTO, myUserId: myUserId)
 
-        // UI 업데이트
-        let uiModel = ChatMessageUIModel(
-            id: chatId,
-            content: messageDTO.content,
-            createdAt: messageDTO.createdAt ?? ISO8601DateFormatter().string(from: Date()),
-            senderNickname: messageDTO.sender?.nick ?? "알 수 없음",
-            senderProfileImage: messageDTO.sender?.profileImage,
-            files: messageDTO.files ?? [],
-            isSentByMe: false,
-            isTemporary: false,
-            sendFailed: false
-        )
-        messages.insert(uiModel, at: 0)
-        updateChatItems()
-
-        Logger.chat.info("✅ [ChatDetailViewModel] Added new message to UI: \(chatId)")
+        Logger.chat.info("✅ [ChatDetailViewModel] Saved message to Realm: \(chatId)")
     }
 
-    /// Setup Coordinator callbacks
+    /// Setup Coordinator callbacks (onMessagesUpdated 제거됨 - @ObservedResults가 UI 업데이트 처리)
     private func setupCoordinatorCallbacks() {
         Task { [weak self] in
             guard let self = self else { return }
@@ -347,24 +306,28 @@ final class ChatDetailViewModel: ObservableObject {
                     self?.syncState = newState
                 }
             }
-
-            await self.syncCoordinator?.setOnMessagesUpdated { [weak self] in
-                guard let self = self else { return }
-                do {
-                    let updatedMessages = try await self.repository.fetchMessagesAsUIModels(
-                        roomId: self.roomId,
-                        limit: 50,
-                        beforeDate: nil
-                    )
-                    await MainActor.run {
-                        self.messages = updatedMessages
-                        self.updateChatItems()
-                    }
-                } catch {
-                    Logger.chat.error("❌ [ChatDetailViewModel] Failed to refresh messages: \(error)")
-                }
-            }
         }
+    }
+
+    /// Observer의 chatItems 변경을 구독하여 미디어 추출
+    private func setupObserverSubscription() {
+        observerCancellable = messagesObserver?.$chatItems
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] items in
+                guard let self = self else { return }
+                self.extractMediaFromObservedItems(items)
+                Logger.chat.info("📡 [ChatDetailViewModel] Observer chatItems updated: \(items.count) items")
+            }
+    }
+
+    /// Observer의 chatItems에서 미디어 아이템 추출
+    private func extractMediaFromObservedItems(_ items: [ChatItem]) {
+        let mediaItems = items.compactMap { item -> [MediaItem]? in
+            guard case .message(let config) = item else { return nil }
+            return config.message.mediaItems(roomId: roomId)
+        }.flatMap { $0 }
+
+        allMediaItems = mediaItems.sorted { $0.createdAt > $1.createdAt }
     }
 
     /// Setup AsyncStream listeners for socket events (extracted for reuse in reconnection)
@@ -503,7 +466,7 @@ final class ChatDetailViewModel: ObservableObject {
             ? filePaths
             : localThumbnailURLs.map { $0.absoluteString } + filePaths.filter { !$0.contains("-thumb.") }
 
-        // Realm Actor 내부에서 객체 생성
+        // Realm에 임시 메시지 저장 → @ObservedResults가 자동으로 UI 표시
         try? await repository.createAndSaveMessage(
             chatId: tempChatId,
             roomId: roomId,
@@ -519,23 +482,6 @@ final class ChatDetailViewModel: ObservableObject {
             isTemporary: true
         )
 
-        // UI 업데이트용 모델 (로컬 썸네일 즉시 표시)
-        let tempUIModel = ChatMessageUIModel(
-            id: tempChatId,
-            content: content,
-            createdAt: createdAt,
-            senderNickname: myNickname.isEmpty ? "나" : myNickname,
-            senderProfileImage: myProfileImage,
-            files: optimisticFiles,
-            isSentByMe: true,
-            isTemporary: true,
-            sendFailed: false
-        )
-        messages.insert(tempUIModel, at: 0)
-
-        // chatItems 업데이트
-        updateChatItems()
-
         do {
             // HTTP API로 메시지 전송
             let requestDTO = SendMessageRequestDTO(content: content, files: filePaths)
@@ -543,7 +489,7 @@ final class ChatDetailViewModel: ObservableObject {
                 ChatRouter.sendMessage(roomId: roomId, requestDTO)
             )
 
-            // 서버 응답의 실제 chatId로 교체
+            // 서버 응답의 실제 chatId로 교체 → @ObservedResults가 자동으로 UI 업데이트
             if let serverChatId = response.chatId {
                 try await repository.deleteMessage(chatId: tempChatId)
 
@@ -562,53 +508,17 @@ final class ChatDetailViewModel: ObservableObject {
                     isTemporary: false
                 )
 
-                // UI 업데이트
-                let realUIModel = ChatMessageUIModel(
-                    id: serverChatId,
-                    content: content,
-                    createdAt: response.createdAt ?? createdAt,
-                    senderNickname: myNickname.isEmpty ? "나" : myNickname,
-                    senderProfileImage: myProfileImage,
-                    files: filePaths,
-                    isSentByMe: true,
-                    isTemporary: false,
-                    sendFailed: false
-                )
-
-                if let index = messages.firstIndex(where: { $0.id == tempChatId }) {
-                    messages[index] = realUIModel
-                }
-
-                // chatItems 업데이트
-                updateChatItems()
-
                 Logger.chat.info("✅ Message sent successfully: \(serverChatId)")
             }
 
         } catch {
             Logger.chat.error("❌ Failed to send message: \(error)")
+            // 실패 상태로 업데이트 → @ObservedResults가 자동으로 UI 반영
             try? await repository.updateMessageStatus(
                 chatId: tempChatId,
                 isTemporary: true,
                 failReason: error.localizedDescription
             )
-
-            if let index = messages.firstIndex(where: { $0.id == tempChatId }) {
-                messages[index] = ChatMessageUIModel(
-                    id: tempChatId,
-                    content: content,
-                    createdAt: createdAt,
-                    senderNickname: myNickname.isEmpty ? "나" : myNickname,
-                    senderProfileImage: myProfileImage,
-                    files: filePaths,
-                    isSentByMe: true,
-                    isTemporary: true,
-                    sendFailed: true
-                )
-            }
-
-            // chatItems 업데이트
-            updateChatItems()
         }
     }
 }
