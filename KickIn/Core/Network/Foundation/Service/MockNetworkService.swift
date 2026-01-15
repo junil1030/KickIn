@@ -14,6 +14,10 @@ final class MockNetworkService: NetworkServiceProtocol {
     var mockError: NetworkError?
     var requestCallCount = 0
     var uploadCallCount = 0
+    
+    func updateCredential(accessToken: String, refreshToken: String) {
+        
+    }
 
     func request<T: Decodable>(_ router: any APIRouter) async throws -> T {
         requestCallCount += 1

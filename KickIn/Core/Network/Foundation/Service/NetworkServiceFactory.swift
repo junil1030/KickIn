@@ -13,7 +13,6 @@ final class NetworkServiceFactory {
     static let shared = NetworkServiceFactory()
 
     private let tokenStorage: any TokenStorageProtocol
-    private let interceptor: AuthenticationInterceptor
     private let session: Session
     private let cachingKit: CachingKit
     private lazy var networkService: NetworkServiceProtocol = {
@@ -34,7 +33,6 @@ final class NetworkServiceFactory {
         sessionConfiguration: URLSessionConfiguration = .default
     ) {
         self.tokenStorage = tokenStorage
-        self.interceptor = AuthenticationInterceptor(tokenStorage: tokenStorage)
 
         // Session 설정
         let config = sessionConfiguration
@@ -51,15 +49,11 @@ final class NetworkServiceFactory {
         config.urlCache = urlCache
 
         // Session 생성 (Interceptor 포함)
-        self.session = Session(
-            configuration: config,
-            interceptor: interceptor
-        )
+        self.session = Session(configuration: config)
 
         // CachingKit 설정 (AuthHeaderProvider 사용)
-        let authHeaderProvider = AuthHeaderProvider(tokenStorage: tokenStorage)
         let cacheConfiguration = CacheConfiguration(
-            headerProvider: authHeaderProvider
+            headerProvider: AuthHeaderProvider()
         )
         self.cachingKit = CachingKit(configuration: cacheConfiguration)
     }
@@ -74,11 +68,11 @@ final class NetworkServiceFactory {
         tokenStorage
     }
 
-    func getInterceptor() -> AuthenticationInterceptor {
-        interceptor
-    }
-
     func getCachingKit() -> CachingKit {
         cachingKit
+    }
+
+    func updateCredential(accessToken: String, refreshToken: String) {
+        networkService.updateCredential(accessToken: accessToken, refreshToken: refreshToken)
     }
 }
