@@ -187,6 +187,35 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
         }
     }
 
+    // MARK: - Batch Operations
+
+    func saveMessagesFromDTOs(_ messages: [ChatMessageItemDTO], myUserId: String) async throws {
+        guard !messages.isEmpty else { return }
+
+        try await actor.write { realm in
+            for messageDTO in messages {
+                let message = ChatMessageObject()
+                message.chatId = messageDTO.chatId ?? UUID().uuidString
+                message.roomId = messageDTO.roomId ?? ""
+                message.content = messageDTO.content
+                message.createdAt = messageDTO.createdAt ?? ISO8601DateFormatter().string(from: Date())
+                message.updatedAt = messageDTO.updatedAt
+                message.senderUserId = messageDTO.sender?.userId
+                message.senderNickname = messageDTO.sender?.nick
+                message.senderProfileImage = messageDTO.sender?.profileImage
+                message.senderIntroduction = messageDTO.sender?.introduction
+                if let files = messageDTO.files {
+                    message.files.append(objectsIn: files)
+                }
+                message.isSentByMe = messageDTO.sender?.userId == myUserId
+                message.isTemporary = false
+
+                realm.add(message, update: .modified)
+            }
+        }
+        Logger.database.info("💾 [Batch] Saved \(messages.count) messages in single transaction")
+    }
+
     // MARK: - Metadata Operations
 
     func getMetadata(roomId: String) async throws -> ChatRoomMetadataObject? {

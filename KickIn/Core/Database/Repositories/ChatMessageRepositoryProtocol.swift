@@ -32,6 +32,9 @@ protocol ChatMessageRepositoryProtocol {
     func deleteMessage(chatId: String) async throws
     func updateMessageStatus(chatId: String, isTemporary: Bool, failReason: String?) async throws
 
+    // Batch Operations
+    func saveMessagesFromDTOs(_ messages: [ChatMessageItemDTO], myUserId: String) async throws
+
     // Metadata Operations
     func getMetadata(roomId: String) async throws -> ChatRoomMetadataObject?
     func updateMetadata(roomId: String, lastCursor: String?, hasMoreData: Bool) async throws

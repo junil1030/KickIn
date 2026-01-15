@@ -9,10 +9,12 @@ import Foundation
 
 protocol SocketServiceProtocol {
     var isConnected: Bool { get }
+    var currentRoom: String? { get }
     var messages: AsyncStream<ChatMessageItemDTO> { get }
     var connectionStates: AsyncStream<Bool> { get }
 
     func prepareNewConnection()
     func connect(roomID: String) async
     func disconnect()
+    func reconnect() async
 }

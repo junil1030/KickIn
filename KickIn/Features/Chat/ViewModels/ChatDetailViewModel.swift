@@ -31,8 +31,10 @@ final class ChatDetailViewModel: ObservableObject {
     private var myProfileImage: String?
 
     private var messages: [ChatMessageUIModel] = []  // 내부 데이터용
-    private var messageQueue: [ChatMessageItemDTO] = []  // 동기화 전 수신 메시지 큐
-    private var isRealmSynced = false  // API 동기화 완료 플래그
+
+    // Sync Coordinator
+    @Published private(set) var syncState: SyncState = .idle
+    private var syncCoordinator: MessageSyncCoordinator?
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
@@ -78,27 +80,44 @@ final class ChatDetailViewModel: ObservableObject {
             messages = try await repository.fetchMessagesAsUIModels(roomId: roomId, limit: 50, beforeDate: nil)
             updateChatItems()
 
-            // 2. 기존 Task 취소
+            // 2. Coordinator 초기화
+            syncCoordinator = MessageSyncCoordinator(
+                repository: repository,
+                networkService: networkService,
+                roomId: roomId,
+                myUserId: myUserId,
+                opponentUserId: opponentUserId
+            )
+            setupCoordinatorCallbacks()
+
+            // 3. 기존 Task 취소
             connectionTask?.cancel()
             messageTask?.cancel()
 
-            // 3. AsyncStream 구독 시작
-            connectWebSocket()
+            // 4. AsyncStream 구독 시작
+            setupStreamListeners()
 
             Logger.chat.info("✅ Stream subscription started")
 
-            // 4. Socket 연결
+            // 5. Socket 연결
             await socketService.connect(roomID: roomId)
 
-            Logger.chat.info("✅ Socket connected, starting API sync")
+            Logger.chat.info("✅ Socket connected, starting sync via Coordinator")
 
-            // 5. API 동기화
-            await fetchAndSync()
+            // 6. 동기화 시작 (Exponential Backoff 포함)
+            try await syncCoordinator?.startSync()
+
+            // 7. UI 갱신
+            messages = try await repository.fetchMessagesAsUIModels(roomId: roomId, limit: 50, beforeDate: nil)
+            updateChatItems()
 
             Logger.chat.info("✅ Initial load complete: \(self.messages.count) messages for room \(self.roomId)")
 
         } catch let error as NetworkError {
             Logger.chat.error("❌ Failed to load messages: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+        } catch let error as SyncError {
+            Logger.chat.error("❌ Sync error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         } catch {
             Logger.chat.error("❌ Unknown error: \(error.localizedDescription)")
@@ -199,6 +218,40 @@ final class ChatDetailViewModel: ObservableObject {
         socketService.disconnect()
     }
 
+    /// Called from ChatLifecycleManager for reconnection after network recovery or foreground return
+    func performReconnectionWithGapFill() async {
+        Logger.chat.info("🔄 [ChatDetailViewModel] Starting reconnection with gap fill for room: \(self.roomId)")
+
+        // 1. Reset Coordinator
+        await syncCoordinator?.reset()
+
+        // 2. Cancel existing tasks
+        connectionTask?.cancel()
+        messageTask?.cancel()
+
+        // 3. Prepare new streams
+        socketService.prepareNewConnection()
+
+        // 4. Setup stream listeners BEFORE connecting
+        setupStreamListeners()
+
+        // 5. Connect socket
+        await socketService.connect(roomID: roomId)
+
+        // 6. Start sync via Coordinator
+        do {
+            try await syncCoordinator?.startSync()
+
+            // 7. UI 갱신
+            messages = try await repository.fetchMessagesAsUIModels(roomId: roomId, limit: 50, beforeDate: nil)
+            updateChatItems()
+        } catch {
+            Logger.chat.error("❌ [ChatDetailViewModel] Reconnection sync failed: \(error)")
+        }
+
+        Logger.chat.info("✅ [ChatDetailViewModel] Reconnection with gap fill complete")
+    }
+
     // MARK: - Private Methods
 
     /// messages 배열을 chatItems로 변환 (날짜 헤더 자동 삽입 + displayConfig 계산)
@@ -246,104 +299,6 @@ final class ChatDetailViewModel: ObservableObject {
         Logger.chat.info("📸 [ChatDetailViewModel] Extracted \(self.allMediaItems.count) media items from \(self.messages.count) messages")
     }
 
-    /// API에서 최신 메시지를 가져와 Realm과 동기화 (최적화: lastChat 비교)
-    private func fetchAndSync() async {
-        Logger.chat.info("🔄 [ChatDetailViewModel] Starting optimized API sync for room: \(self.roomId)")
-
-        do {
-            // 1. createOrGetChatRoom으로 lastChat 확인
-            let requestDTO = CreateChatRoomRequestDTO(opponentId: opponentUserId)
-            let chatRoomResponse: ChatRoomResponseDTO = try await networkService.request(
-                ChatRouter.createOrGetChatRoom(requestDTO)
-            )
-
-            let serverLastChatId = chatRoomResponse.lastChat?.chatId
-            Logger.chat.info("📊 [ChatDetailViewModel] Server lastChatId: \(serverLastChatId ?? "nil")")
-
-            // 2. Realm의 최신 메시지 확인 (temporary가 아닌 것 중)
-            let realmLastMessage = messages.first(where: { !$0.isTemporary })
-            Logger.chat.info("📊 [ChatDetailViewModel] Realm lastChatId: \(realmLastMessage?.id ?? "nil")")
-
-            // 3. 비교 결과에 따라 동기화 전략 결정
-            if serverLastChatId == realmLastMessage?.id, serverLastChatId != nil {
-                // 같으면: 이미 동기화됨, 임시 메시지만 정리
-                Logger.chat.info("✅ [ChatDetailViewModel] Already synced, cleaning up temporary messages only")
-                await cleanupFailedTemporaryMessages()
-            } else {
-                // 다르면: 전체 동기화 수행
-                Logger.chat.info("🔄 [ChatDetailViewModel] Sync needed, fetching full messages")
-                await performFullSync()
-            }
-
-            isRealmSynced = true
-            await processQueuedMessages()
-
-        } catch {
-            Logger.chat.error("❌ [ChatDetailViewModel] Failed to check lastChat: \(error)")
-            // 실패 시 전체 동기화 시도
-            await performFullSync()
-            isRealmSynced = true
-            await processQueuedMessages()
-        }
-    }
-
-    /// 전체 메시지 동기화 수행
-    private func performFullSync() async {
-        do {
-            // API에서 최신 메시지 가져오기
-            let response: ChatMessagesResponseDTO = try await networkService.request(
-                ChatRouter.getChatMessages(roomId: roomId, next: nil)
-            )
-
-            guard let apiMessages = response.data else {
-                Logger.chat.info("⚠️ No messages from API")
-                return
-            }
-
-            // Realm과 API 메시지 동기화
-            try await syncMessagesWithAPI(apiMessages: apiMessages)
-
-            // 동기화 완료 후 Realm에서 최신 데이터 다시 로드
-            messages = try await repository.fetchMessagesAsUIModels(roomId: roomId, limit: 50, beforeDate: nil)
-            updateChatItems()
-
-            // 임시 메시지 정리
-            await cleanupFailedTemporaryMessages()
-
-            Logger.chat.info("✅ [ChatDetailViewModel] Full sync completed")
-
-        } catch {
-            Logger.chat.error("❌ [ChatDetailViewModel] Failed to perform full sync: \(error)")
-        }
-    }
-
-    /// 서버에 없는 실패한 임시 메시지 정리
-    private func cleanupFailedTemporaryMessages() async {
-        let temporaryMessages = messages.filter { $0.isTemporary }
-
-        guard !temporaryMessages.isEmpty else {
-            Logger.chat.info("✅ [ChatDetailViewModel] No temporary messages to clean up")
-            return
-        }
-
-        Logger.chat.info("🧹 [ChatDetailViewModel] Cleaning up \(temporaryMessages.count) temporary messages")
-
-        for tempMessage in temporaryMessages {
-            // Realm에서 삭제
-            try? await repository.deleteMessage(chatId: tempMessage.id)
-
-            // UI에서 제거
-            if let index = messages.firstIndex(where: { $0.id == tempMessage.id }) {
-                messages.remove(at: index)
-            }
-        }
-
-        // UI 업데이트
-        updateChatItems()
-
-        Logger.chat.info("✅ [ChatDetailViewModel] Temporary messages cleaned up")
-    }
-
     /// 실시간으로 수신한 메시지 처리 (중복 체크 포함)
     private func handleReceivedMessage(_ messageDTO: ChatMessageItemDTO) async {
         Logger.chat.info("📬 [ChatDetailViewModel] Handling received message: \(messageDTO.chatId ?? "unknown")")
@@ -382,22 +337,38 @@ final class ChatDetailViewModel: ObservableObject {
         Logger.chat.info("✅ [ChatDetailViewModel] Added new message to UI: \(chatId)")
     }
 
-    /// 큐에 쌓인 메시지들을 순차 처리
-    private func processQueuedMessages() async {
-        guard !self.messageQueue.isEmpty else { return }
+    /// Setup Coordinator callbacks
+    private func setupCoordinatorCallbacks() {
+        Task { [weak self] in
+            guard let self = self else { return }
 
-        Logger.chat.info("📦 [ChatDetailViewModel] Processing \(self.messageQueue.count) queued messages")
+            await self.syncCoordinator?.setOnStateChange { [weak self] newState in
+                Task { @MainActor in
+                    self?.syncState = newState
+                }
+            }
 
-        for messageDTO in self.messageQueue {
-            await handleReceivedMessage(messageDTO)
+            await self.syncCoordinator?.setOnMessagesUpdated { [weak self] in
+                guard let self = self else { return }
+                do {
+                    let updatedMessages = try await self.repository.fetchMessagesAsUIModels(
+                        roomId: self.roomId,
+                        limit: 50,
+                        beforeDate: nil
+                    )
+                    await MainActor.run {
+                        self.messages = updatedMessages
+                        self.updateChatItems()
+                    }
+                } catch {
+                    Logger.chat.error("❌ [ChatDetailViewModel] Failed to refresh messages: \(error)")
+                }
+            }
         }
-
-        // 큐 비우기
-        self.messageQueue.removeAll()
-        Logger.chat.info("✅ [ChatDetailViewModel] Queued messages processed")
     }
 
-    private func connectWebSocket() {
+    /// Setup AsyncStream listeners for socket events (extracted for reuse in reconnection)
+    private func setupStreamListeners() {
         Logger.chat.info("🎧 [ChatDetailViewModel] Setting up AsyncStream listeners for room: \(self.roomId)")
 
         // 연결 상태 스트림 구독
@@ -414,11 +385,6 @@ final class ChatDetailViewModel: ObservableObject {
 
                 if isConnected {
                     Logger.chat.info("✅ [ChatDetailViewModel] WebSocket connected successfully")
-
-                    // 연결 성공 시 API 동기화 (최초 1회만)
-                    if !self.isRealmSynced {
-                        await self.fetchAndSync()
-                    }
                 } else {
                     Logger.chat.warning("⚠️ [ChatDetailViewModel] WebSocket disconnected")
                 }
@@ -435,19 +401,17 @@ final class ChatDetailViewModel: ObservableObject {
             }
 
             Logger.chat.info("📬 [ChatDetailViewModel] messageTask started, waiting for messages...")
-            Logger.chat.info("📬 [ChatDetailViewModel] Current isRealmSynced: \(self.isRealmSynced)")
 
             for await messageDTO in socketService.messages {
                 Logger.chat.info("📬 [ChatDetailViewModel] Received message in Task: \(messageDTO.chatId ?? "unknown")")
 
-                // 동기화 전이면 큐에 저장, 동기화 후면 즉시 처리
-                if !self.isRealmSynced {
-                    Logger.chat.info("📥 [ChatDetailViewModel] Queueing message (not synced yet): \(messageDTO.chatId ?? "unknown")")
-                    self.messageQueue.append(messageDTO)
-                } else {
-                    Logger.chat.info("📥 [ChatDetailViewModel] Processing message immediately: \(messageDTO.chatId ?? "unknown")")
+                // Coordinator가 처리 여부 결정
+                let shouldProcess = await self.syncCoordinator?.processStreamMessage(messageDTO) ?? false
+
+                if shouldProcess {
                     await self.handleReceivedMessage(messageDTO)
                 }
+                // shouldProcess가 false면 Coordinator 내부에서 buffer에 저장됨
             }
 
             Logger.chat.info("📬 [ChatDetailViewModel] messageTask loop ended")
@@ -456,37 +420,6 @@ final class ChatDetailViewModel: ObservableObject {
         Logger.chat.info("✅ [ChatDetailViewModel] AsyncStream listeners setup complete")
         Logger.chat.info("✅ [ChatDetailViewModel] connectionTask status: \(self.connectionTask?.isCancelled ?? true ? "cancelled" : "running")")
         Logger.chat.info("✅ [ChatDetailViewModel] messageTask status: \(self.messageTask?.isCancelled ?? true ? "cancelled" : "running")")
-    }
-
-    private func syncMessagesWithAPI(
-        apiMessages: [ChatMessageItemDTO]
-    ) async throws {
-        // Realm에서 chatId Set만 가져오기 (Thread-safe)
-        let localChatIds = try await repository.fetchChatIds(roomId: roomId)
-        let apiChatIds = Set(apiMessages.compactMap { $0.chatId })
-
-        // API에는 있지만 Realm에 없는 메시지 (유실 메시지)
-        let missingChatIds = apiChatIds.subtracting(localChatIds)
-
-        if !missingChatIds.isEmpty {
-            Logger.chat.info("⚠️ Found \(missingChatIds.count) missing messages")
-
-            // 유실된 메시지를 DTO로 Repository에 저장
-            let missingMessages = apiMessages.filter { missingChatIds.contains($0.chatId ?? "") }
-            for messageDTO in missingMessages {
-                try await repository.saveMessageFromDTO(messageDTO, myUserId: myUserId)
-            }
-        }
-
-        // Realm의 temporary 메시지 중 API에 있는 것들을 확인 처리
-        // (Repository에서 직접 처리하도록 메서드 추가 필요 시 추가)
-        for apiChatId in apiChatIds {
-            try? await repository.updateMessageStatus(
-                chatId: apiChatId,
-                isTemporary: false,
-                failReason: nil
-            )
-        }
     }
 
     private func uploadImages(_ images: [UIImage]) async throws -> [String] {
