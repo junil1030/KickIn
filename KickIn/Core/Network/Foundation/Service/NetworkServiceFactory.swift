@@ -53,7 +53,7 @@ final class NetworkServiceFactory {
 
         // CachingKit 설정 (AuthHeaderProvider 사용)
         let cacheConfiguration = CacheConfiguration(
-            headerProvider: AuthHeaderProvider()
+            headerProvider: AuthHeaderProvider(tokenStorage: tokenStorage)
         )
         self.cachingKit = CachingKit(configuration: cacheConfiguration)
     }
