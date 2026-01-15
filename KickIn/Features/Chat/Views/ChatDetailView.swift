@@ -48,7 +48,8 @@ struct ChatDetailView: View {
                                 .padding()
                         }
 
-                        ForEach(viewModel.chatItems.reversed()) { item in
+                        // Phase 4: @ObservedResults 기반 displayedChatItems 사용
+                        ForEach(viewModel.displayedChatItems.reversed()) { item in
                             switch item {
                             case .dateHeader(_, let formatted):
                                 Text(formatted)
@@ -75,9 +76,9 @@ struct ChatDetailView: View {
                 .onTapGesture {
                     isInputFocused = false
                 }
-                .onChange(of: viewModel.chatItems.count) { _, _ in
+                .onChange(of: viewModel.displayedChatItems.count) { _, _ in
                     // 새 메시지가 추가되면 스크롤
-                    if let firstItem = viewModel.chatItems.first {
+                    if let firstItem = viewModel.displayedChatItems.first {
                         withAnimation {
                             proxy.scrollTo(firstItem.id, anchor: .bottom)
                         }

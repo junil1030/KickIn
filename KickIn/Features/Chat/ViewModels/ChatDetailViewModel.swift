@@ -14,7 +14,10 @@ import UIKit
 final class ChatDetailViewModel: ObservableObject {
     // MARK: - Published Properties
 
-    @Published var chatItems: [ChatItem] = []  // UI 렌더링용 (날짜 헤더 + 메시지)
+    /// @ObservedResults 기반 메시지 Observer (Phase 3: 자동 UI 업데이트용)
+    @Published private(set) var messagesObserver: ChatMessagesObserver?
+
+    @Published var chatItems: [ChatItem] = []  // UI 렌더링용 (날짜 헤더 + 메시지) - Phase 5에서 제거 예정
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var hasMoreData = true
@@ -44,6 +47,15 @@ final class ChatDetailViewModel: ObservableObject {
 
     private var connectionTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
+    private var observerCancellable: AnyCancellable?
+
+    // MARK: - Computed Properties
+
+    /// View에서 사용할 chatItems (Observer 기반 또는 기존 방식)
+    /// Phase 4에서 View가 이 속성을 사용하도록 변경
+    var displayedChatItems: [ChatItem] {
+        messagesObserver?.chatItems ?? chatItems
+    }
 
     // MARK: - Initialization
 
@@ -64,6 +76,7 @@ final class ChatDetailViewModel: ObservableObject {
     deinit {
         connectionTask?.cancel()
         messageTask?.cancel()
+        observerCancellable?.cancel()
     }
 
     // MARK: - Public Methods
@@ -75,8 +88,13 @@ final class ChatDetailViewModel: ObservableObject {
         // 내 정보 조회
         myUserId = await tokenStorage.getUserId() ?? ""
 
+        // Phase 3: @ObservedResults 기반 Observer 초기화
+        messagesObserver = ChatMessagesObserver(roomId: roomId)
+        setupObserverSubscription()
+        Logger.chat.info("📡 [ChatDetailViewModel] ChatMessagesObserver initialized for room: \(self.roomId)")
+
         do {
-            // 1. Realm에서 로컬 메시지 로드 (즉시 표시)
+            // 1. Realm에서 로컬 메시지 로드 (즉시 표시) - Phase 5에서 제거 예정
             messages = try await repository.fetchMessagesAsUIModels(roomId: roomId, limit: 50, beforeDate: nil)
             updateChatItems()
 
@@ -365,6 +383,27 @@ final class ChatDetailViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Phase 3: Observer의 chatItems 변경을 구독하여 미디어 추출
+    private func setupObserverSubscription() {
+        observerCancellable = messagesObserver?.$chatItems
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] items in
+                guard let self = self else { return }
+                self.extractMediaFromObservedItems(items)
+                Logger.chat.info("📡 [ChatDetailViewModel] Observer chatItems updated: \(items.count) items")
+            }
+    }
+
+    /// Observer의 chatItems에서 미디어 아이템 추출
+    private func extractMediaFromObservedItems(_ items: [ChatItem]) {
+        let mediaItems = items.compactMap { item -> [MediaItem]? in
+            guard case .message(let config) = item else { return nil }
+            return config.message.mediaItems(roomId: roomId)
+        }.flatMap { $0 }
+
+        allMediaItems = mediaItems.sorted { $0.createdAt > $1.createdAt }
     }
 
     /// Setup AsyncStream listeners for socket events (extracted for reuse in reconnection)
