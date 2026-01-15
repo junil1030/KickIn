@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ChatDetailView: View {
     @StateObject private var viewModel: ChatDetailViewModel
@@ -14,14 +15,24 @@ struct ChatDetailView: View {
     @State private var selectedVideoURLs: [URL] = []
     @FocusState private var isInputFocused: Bool
 
+    // Lifecycle management
+    private let lifecycleManager = ChatLifecycleManager.shared
+    @State private var reconnectionCancellable: AnyCancellable?
+
+    // Store for lifecycle registration
+    let roomId: String
+    let opponentUserId: String
     let otherParticipantName: String
 
     init(roomId: String, opponentUserId: String, otherParticipantName: String) {
+        self.roomId = roomId
+        self.opponentUserId = opponentUserId
+        self.otherParticipantName = otherParticipantName
+
         self._viewModel = StateObject(wrappedValue: ChatDetailViewModel(
             roomId: roomId,
             opponentUserId: opponentUserId
         ))
-        self.otherParticipantName = otherParticipantName
     }
 
     var body: some View {
@@ -101,10 +112,10 @@ struct ChatDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .defaultBackground()
         .task {
-            await viewModel.loadInitialMessages()
+            await setupAndLoad()
         }
         .onDisappear {
-            viewModel.disconnect()
+            cleanup()
         }
         .alert("오류", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("확인", role: .cancel) {
@@ -115,5 +126,37 @@ struct ChatDetailView: View {
                 Text(errorMessage)
             }
         }
+    }
+
+    // MARK: - Private Methods
+
+    private func setupAndLoad() async {
+        // Register with lifecycle manager
+        await MainActor.run {
+            lifecycleManager.registerActiveChatRoom(
+                roomId: roomId,
+                opponentUserId: opponentUserId,
+                viewModel: viewModel
+            )
+        }
+
+        // Subscribe to reconnection events
+        reconnectionCancellable = lifecycleManager.reconnectionNeededPublisher
+            .filter { $0 == roomId }
+            .sink { _ in
+                Task {
+                    await viewModel.performReconnectionWithGapFill()
+                }
+            }
+
+        // Initial load
+        await viewModel.loadInitialMessages()
+    }
+
+    private func cleanup() {
+        reconnectionCancellable?.cancel()
+        reconnectionCancellable = nil
+        lifecycleManager.unregisterActiveChatRoom()
+        viewModel.disconnect()
     }
 }

@@ -20,6 +20,11 @@ final class SocketService: SocketServiceProtocol {
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
+    private var currentRoomID: String?
+
+    var currentRoom: String? {
+        currentRoomID
+    }
 
     private var messageContinuation: AsyncStream<ChatMessageItemDTO>.Continuation?
     private var connectionContinuation: AsyncStream<Bool>.Continuation?
@@ -94,6 +99,22 @@ final class SocketService: SocketServiceProtocol {
         Logger.chat.info("🔌 Socket disconnected")
     }
 
+    /// Reconnect to the same room (for network recovery / foreground return)
+    func reconnect() async {
+        guard let roomID = currentRoomID else {
+            Logger.chat.warning("⚠️ [SocketService] Cannot reconnect: no current room")
+            return
+        }
+
+        Logger.chat.info("🔄 [SocketService] Reconnecting to room: \(roomID)")
+
+        // Prepare new streams before connecting
+        prepareNewConnection()
+
+        // Reconnect
+        await connect(roomID: roomID)
+    }
+
     // MARK: - Private Methods
     
     private func configure(roomID: String) async {
@@ -104,6 +125,7 @@ final class SocketService: SocketServiceProtocol {
         
         guard let url = URL(string: APIConfig.socketURL) else { return }
         
+        // Enhanced mobile-optimized configuration
         let config: SocketIOClientConfiguration = [
             .log(false),
             .compress,
@@ -112,14 +134,16 @@ final class SocketService: SocketServiceProtocol {
                 "SeSACKey": APIConfig.apikey
             ]),
             .reconnects(true),
-            .reconnectAttempts(3),
-            .reconnectWait(1),
-            .reconnectWaitMax(16)
+            .reconnectAttempts(5),           // Increased from 3
+            .reconnectWait(2),               // Start at 2s instead of 1s
+            .reconnectWaitMax(30),           // Max 30s instead of 16s
+            .forceWebsockets(true)           // Force WebSocket (no polling fallback)
         ]
-        
+
         manager = SocketManager(socketURL: url, config: config)
         socket = manager?.socket(forNamespace: "/chats-\(roomID)")
-        
+
+        currentRoomID = roomID  // Track current room
         setupEventHandlers()
     }
     
