@@ -158,6 +158,6 @@ struct ChatDetailView: View {
         reconnectionCancellable?.cancel()
         reconnectionCancellable = nil
         lifecycleManager.unregisterActiveChatRoom()
-        viewModel.disconnect()
+        viewModel.cleanup()
     }
 }

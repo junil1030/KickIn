@@ -70,9 +70,24 @@ final class ChatDetailViewModel: ObservableObject {
     }
 
     deinit {
+        // deinit은 nonisolated이므로 Task 취소만 수행
         connectionTask?.cancel()
         messageTask?.cancel()
         observerCancellable?.cancel()
+    }
+
+    // MARK: - Cleanup
+
+    /// 리소스 정리 (View의 onDisappear에서 호출)
+    func cleanup() {
+        connectionTask?.cancel()
+        messageTask?.cancel()
+        observerCancellable?.cancel()
+        messagesObserver?.invalidateObservation()
+        socketService.disconnect()
+        connectionTask = nil
+        messageTask = nil
+        observerCancellable = nil
     }
 
     // MARK: - Public Methods
