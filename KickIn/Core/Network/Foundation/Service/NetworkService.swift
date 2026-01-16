@@ -12,11 +12,22 @@ import OSLog
 final class NetworkService: NetworkServiceProtocol {
     private let session: Session
     private let tokenStorage: any TokenStorageProtocol
+    private let interceptor: AuthenticationInterceptor<KickInAuthenticator>
 
     init(tokenStorage: any TokenStorageProtocol) {
         self.tokenStorage = tokenStorage
 
-        let interceptor = AuthenticationInterceptor(tokenStorage: tokenStorage)
+        let authenticator = KickInAuthenticator(tokenStorage: tokenStorage)
+        let emptyCredential = KickInAuthenticationCredential(
+            accessToken: "",
+            refreshToken: "",
+            expiration: Date.distantFuture
+        )
+        self.interceptor = AuthenticationInterceptor(
+            authenticator: authenticator,
+            credential: emptyCredential
+        )
+
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 30
@@ -25,6 +36,15 @@ final class NetworkService: NetworkServiceProtocol {
             configuration: configuration,
             interceptor: interceptor
         )
+    }
+
+    func updateCredential(accessToken: String, refreshToken: String) {
+        let credential = KickInAuthenticationCredential(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiration: Date.distantFuture
+        )
+        interceptor.credential = credential
     }
 
     // MARK: - NetworkServiceProtocol

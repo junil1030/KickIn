@@ -8,28 +8,19 @@
 import Foundation
 import CachingKit
 
-/// Header provider that automatically injects authentication tokens and API keys
+/// Header provider that injects API key and Authorization for CachingKit
 final class AuthHeaderProvider: HeaderProvider {
-    // MARK: - Properties
-
     private let tokenStorage: any TokenStorageProtocol
-
-    // MARK: - Initialization
 
     init(tokenStorage: any TokenStorageProtocol) {
         self.tokenStorage = tokenStorage
     }
 
-    // MARK: - HeaderProvider
-
     func headers() async -> [String: String] {
-        var headers: [String: String] = [:]
+        var headers = ["SeSACKey": APIConfig.apikey]
 
-        // Add API key
-        headers["SeSACKey"] = await APIConfig.apikey
-
-        // Add access token if available
-        if let accessToken = await tokenStorage.getAccessToken() {
+        // Add Authorization header if access token exists
+        if let accessToken = await tokenStorage.getAccessToken(), !accessToken.isEmpty {
             headers["Authorization"] = accessToken
         }
 

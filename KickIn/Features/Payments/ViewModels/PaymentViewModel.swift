@@ -26,7 +26,7 @@ final class PaymentViewModel: ObservableObject {
 
         Task {
             for impUid in pending {
-                await validateReceipt(impUid: impUid)
+                await validateReceipt(impUid: impUid, silent: true)
             }
         }
     }
@@ -59,35 +59,59 @@ final class PaymentViewModel: ObservableObject {
         addPendingImpUid(impUid)
 
         Task {
-            await validateReceipt(impUid: impUid)
+            await validateReceipt(impUid: impUid, silent: false)
         }
     }
 
-    private func validateReceipt(impUid: String) async {
+    private func validateReceipt(impUid: String, silent: Bool) async {
         do {
             let response: PaymentValidationResponseDTO = try await networkService.request(
                 PaymentRouter.validateReceipt(PaymentValidationRequestDTO(impUid: impUid))
             )
 
-            await MainActor.run {
-                self.validationResponse = response
-                self.onValidationSuccess?()
-            }
-
             removePendingImpUid(impUid)
             Logger.network.info("✅ Validated receipt for imp_uid: \(impUid)")
+
+            if !silent {
+                await MainActor.run {
+                    self.validationResponse = response
+                    self.onValidationSuccess?()
+                }
+            }
         } catch let error as NetworkError {
+            if case .httpError(let statusCode, _) = error {
+                if statusCode == 409 {
+                    removePendingImpUid(impUid)
+                    Logger.network.info("✅ Receipt already validated for imp_uid: \(impUid)")
+                    if !silent {
+                        await MainActor.run {
+                            self.onValidationSuccess?()
+                        }
+                    }
+                    return
+                }
+
+                if statusCode == 400 {
+                    removePendingImpUid(impUid)
+                    Logger.network.info("🗑️ Removed invalid imp_uid from pending: \(impUid)")
+                    return
+                }
+            }
             Logger.network.error("❌ Failed to validate receipt: \(error.localizedDescription)")
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.onPaymentFailure?(error.localizedDescription)
+            if !silent {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                    self.onPaymentFailure?(error.localizedDescription)
+                }
             }
         } catch {
             Logger.network.error("❌ Unknown error validating receipt: \(error.localizedDescription)")
-            await MainActor.run {
-                let message = "결제 검증에 실패했습니다."
-                self.errorMessage = message
-                self.onPaymentFailure?(message)
+            if !silent {
+                await MainActor.run {
+                    let message = "결제 검증에 실패했습니다."
+                    self.errorMessage = message
+                    self.onPaymentFailure?(message)
+                }
             }
         }
     }

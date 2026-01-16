@@ -65,14 +65,19 @@ struct ContentView: View {
             let decoder = JSONDecoder()
             let refreshResponse = try decoder.decode(RefreshTokenResponseDTO.self, from: data)
 
-            if let accessToken = refreshResponse.accessToken,
+            if let newAccessToken = refreshResponse.accessToken,
                let newRefreshToken = refreshResponse.refreshToken {
-                await tokenStorage.setAccessToken(accessToken)
+                await tokenStorage.setAccessToken(newAccessToken)
                 await tokenStorage.setRefreshToken(newRefreshToken)
-                
+
+                NetworkServiceFactory.shared.updateCredential(
+                    accessToken: newAccessToken,
+                    refreshToken: newRefreshToken
+                )
+
 #if DEBUG
-                Logger.auth.info("Access Token: \(accessToken)")
-                Logger.auth.info("Refresh Token: \(refreshToken)")
+                Logger.auth.info("Access Token: \(newAccessToken)")
+                Logger.auth.info("Refresh Token: \(newRefreshToken)")
 #endif
 
                 isAuthenticated = true
