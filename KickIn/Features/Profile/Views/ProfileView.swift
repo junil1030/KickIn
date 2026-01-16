@@ -13,6 +13,7 @@ struct ProfileView: View {
 
     @State private var showLogoutAlert = false
     @State private var showWithdrawAlert = false
+    @State private var showEditProfile = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -25,7 +26,7 @@ struct ProfileView: View {
                     ProfileHeaderView(
                         profile: profile,
                         onEditProfile: {
-                            // TODO: 프로필 편집 화면으로 이동
+                            showEditProfile = true
                         }
                     )
 
@@ -132,6 +133,17 @@ struct ProfileView: View {
             }
         } message: {
             Text("회원 탈퇴 시 모든 데이터가 삭제됩니다.\n정말 탈퇴하시겠습니까?")
+        }
+        .sheet(isPresented: $showEditProfile) {
+            ProfileEditView()
+        }
+        .onChange(of: showEditProfile) { _, isPresented in
+            if !isPresented {
+                // 편집 화면이 닫힐 때 프로필 새로고침
+                Task {
+                    await viewModel.loadMyProfile()
+                }
+            }
         }
     }
 }
