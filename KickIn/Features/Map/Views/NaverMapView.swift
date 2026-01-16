@@ -117,7 +117,7 @@ struct NaverMapView: UIViewRepresentable {
 
         func updateClusters(_ clusters: [ClusterCenter], on mapView: NMFMapView) {
             clusterMarkers.forEach { $0.mapView = nil }
-            clusterMarkers = clusters.map { cluster in
+            clusterMarkers = clusters.enumerated().map { index, cluster in
                 let marker = NMFMarker()
                 marker.position = NMGLatLng(
                     lat: cluster.coordinate.latitude,
@@ -130,6 +130,16 @@ struct NaverMapView: UIViewRepresentable {
 
                 // Set anchor to center to prevent clipping
                 marker.anchor = CGPoint(x: 0.5, y: 0.5)
+
+                // Add touch handler for cluster marker
+                marker.touchHandler = { [weak self] _ in
+                    guard let self = self else { return false }
+                    // Notify ViewModel to show cluster estate list
+                    Task { @MainActor in
+                        self.viewModel.selectCluster(cluster)
+                    }
+                    return true
+                }
 
                 marker.mapView = mapView
                 return marker

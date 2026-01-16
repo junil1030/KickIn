@@ -112,7 +112,12 @@ struct ClusterResult {
 }
 
 /// 클러스터의 중심점 (지도 표시용)
-struct ClusterCenter {
+struct ClusterCenter: Identifiable {
+    /// 고유 ID (클러스터 내 점들의 ID 조합)
+    var id: String {
+        pointIds.sorted().joined(separator: ",")
+    }
+
     /// 중심 좌표 (클러스터 내 점들의 평균)
     let coordinate: CLLocationCoordinate2D
 
@@ -121,6 +126,17 @@ struct ClusterCenter {
 
     /// 클러스터에 속한 점들의 ID
     let pointIds: [String]
+
+    /// 클러스터에 속한 점들 (매물 정보 포함)
+    let points: [QuadPoint]
+
+    /// 클러스터 내 매물들을 InterestUIModel 배열로 변환
+    var estates: [InterestUIModel] {
+        points.compactMap { point in
+            guard let mapPoint = point.mapPoint else { return nil }
+            return mapPoint.toInterestUIModel(id: point.id)
+        }
+    }
 
     /// QuadPoint 배열로부터 중심점 계산
     /// - Parameters:
@@ -136,41 +152,18 @@ struct ClusterCenter {
             self.coordinate = CLLocationCoordinate2D(latitude: 0, longitude: 0)
             self.pointCount = 0
             self.pointIds = []
+            self.points = []
             return
         }
 
-        // 중심점 계산 (centroid)
+        // 중심점 계산 (centroid) - 클러스터 내 매물들의 위경도 평균
         let avgLat = points.map { $0.latitude }.reduce(0, +) / Double(points.count)
         let avgLon = points.map { $0.longitude }.reduce(0, +) / Double(points.count)
 
-        // Apply jitter only for grid-based clustering
-        let finalLat: Double
-        let finalLon: Double
-
-        if mode == .gridBased, let cellSize = gridCellSize {
-            // Deterministic seed from cluster point IDs
-            let sortedIds = points.map { $0.id }.sorted().joined()
-            let seed = sortedIds.hashValue
-            var generator = SeededRandomGenerator(seed: seed)
-
-            // Jitter amount: 7.5% of grid cell size
-            let jitterFactor = SpatialConstants.gridJitterFactor
-            let jitterAmount = cellSize * jitterFactor
-
-            // Apply random offset within ±jitterAmount
-            let latOffset = Double.random(in: -jitterAmount...jitterAmount, using: &generator)
-            let lonOffset = Double.random(in: -jitterAmount...jitterAmount, using: &generator)
-
-            finalLat = avgLat + latOffset
-            finalLon = avgLon + lonOffset
-        } else {
-            // No jitter for DBSCAN or when cellSize unavailable
-            finalLat = avgLat
-            finalLon = avgLon
-        }
-
-        self.coordinate = CLLocationCoordinate2D(latitude: finalLat, longitude: finalLon)
+        // 단일 매물일 때는 정확히 해당 위치에, 여러 매물일 때는 중심점에 마커 표시
+        self.coordinate = CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon)
         self.pointCount = points.count
         self.pointIds = points.map { $0.id }
+        self.points = points
     }
 }
