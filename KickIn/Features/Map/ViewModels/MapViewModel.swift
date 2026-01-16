@@ -18,6 +18,7 @@ struct MapState {
     var noisePoints: [QuadPoint] = []
     var isLoading = false
     var errorMessage: String?
+    var selectedCluster: ClusterCenter? = nil
 }
 
 final class MapViewModel: ObservableObject {
@@ -83,6 +84,13 @@ final class MapViewModel: ObservableObject {
             // Request location if not available
             locationManager.startUpdatingLocation()
         }
+    }
+
+    /// Select a cluster to show estate list
+    func selectCluster(_ cluster: ClusterCenter?) {
+        var newState = state
+        newState.selectedCluster = cluster
+        state = newState
     }
 
     /// Called from NaverMapView when camera changes (only user-initiated)

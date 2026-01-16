@@ -68,6 +68,20 @@ struct MapView: View {
                         .padding(.bottom, 50)
                 }
             }
+
+            // Hidden NavigationLink for programmatic navigation
+            NavigationLink(
+                destination: viewModel.state.selectedCluster.map { cluster in
+                    ClusterEstateListView(estates: cluster.estates)
+                },
+                isActive: Binding(
+                    get: { viewModel.state.selectedCluster != nil },
+                    set: { if !$0 { viewModel.selectCluster(nil) } }
+                )
+            ) {
+                EmptyView()
+            }
+            .hidden()
         }
     }
 }
