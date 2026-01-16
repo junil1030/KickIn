@@ -27,6 +27,9 @@ extension Logger {
     /// 채팅 관련 로그 (메시지, SocketIO)
     nonisolated static let chat = Logger(subsystem: subsystem, category: "Chat")
 
+    /// 프로필 관련 로그 (프로필 조회, 수정, 이미지 업로드)
+    nonisolated static let profile = Logger(subsystem: subsystem, category: "Profile")
+
     /// 일반 로그
     nonisolated static let `default` = Logger(subsystem: subsystem, category: "Default")
 }
