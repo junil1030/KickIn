@@ -57,4 +57,31 @@ enum SpatialConstants {
         if distance < 1200 { return 2 }
         return defaultMinPoints
     }
+
+    // MARK: - Strategy Selection
+
+    /// 클러스터링 전략 선택 임계값
+    /// - 데이터 크기가 이 값보다 크면 Grid-based 전략 사용
+    /// - 데이터 크기가 이 값보다 작고 필터가 활성화되면 DBSCAN 전략 사용
+    static let strategyThreshold: Int = 5_000
+
+    // MARK: - Grid-based Clustering
+
+    /// 지도 반경에 따른 적응형 Grid Depth 계산
+    /// - Parameter maxDistance: 지도 반경 (미터)
+    /// - Returns: QuadTree grid depth (1~10)
+    static func gridDepth(forMaxDistance distance: Int) -> Int {
+        switch distance {
+        case 0..<500:        return 4  // Very zoomed in
+        case 500..<1000:     return 3
+        case 1000..<3000:    return 2
+        case 3000..<10000:   return 1
+        case 10000..<50000:  return 1
+        default:             return 1   // Very zoomed out
+        }
+    }
+
+    /// Jitter factor for grid-based clustering (7.5%)
+    /// Applied as percentage of grid cell size to break up visual grid patterns
+    static let gridJitterFactor: Double = 0.075
 }

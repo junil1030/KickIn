@@ -10,20 +10,26 @@ import Combine
 import CoreLocation
 import OSLog
 
+/// Consolidated map state for atomic updates
+struct MapState {
+    var mapPoints: [MapPoint] = []
+    var quadPoints: [QuadPoint] = []
+    var clusters: [ClusterCenter] = []
+    var noisePoints: [QuadPoint] = []
+    var isLoading = false
+    var errorMessage: String?
+}
+
 final class MapViewModel: ObservableObject {
     // MARK: - Published Properties
-    @Published var mapPoints: [MapPoint] = []
-    @Published var quadPoints: [QuadPoint] = []
-    @Published var clusters: [ClusterCenter] = []
-    @Published var noisePoints: [QuadPoint] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+    @Published private(set) var state = MapState()
     @Published var initialLocation: CLLocationCoordinate2D?
     @Published var shouldMoveToLocation = false
+    @Published var filterState: EstateFilter?
 
     // MARK: - Private Properties
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
-    private let clusteringService: ClusteringServiceProtocol
+    private let clusteringManager: ClusteringStrategyManager
     private let locationManager = LocationManager()
     private var cancellables = Set<AnyCancellable>()
 
@@ -31,8 +37,8 @@ final class MapViewModel: ObservableObject {
     private let cameraChangeSubject = PassthroughSubject<CameraChangeEvent, Never>()
 
     // MARK: - Initialization
-    init(clusteringService: ClusteringServiceProtocol = ClusteringService()) {
-        self.clusteringService = clusteringService
+    init(clusteringManager: ClusteringStrategyManager = ClusteringStrategyManager()) {
+        self.clusteringManager = clusteringManager
         setupDebounce()
         setupLocationObserver()
         requestLocationPermission()
@@ -53,6 +59,7 @@ final class MapViewModel: ObservableObject {
     private func setupLocationObserver() {
         locationManager.$currentLocation
             .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] location in
                 self?.initialLocation = location
                 Logger.ui.info("📍 Initial location set: \(location.latitude), \(location.longitude)")
@@ -114,12 +121,17 @@ final class MapViewModel: ObservableObject {
 
     /// Fetch nearby estates from API
     private func fetchNearbyEstates(event: CameraChangeEvent) async {
+        let pipelineStartTime = CFAbsoluteTimeGetCurrent()
+
         await MainActor.run {
-            isLoading = true
-            errorMessage = nil
+            var loadingState = self.state
+            loadingState.isLoading = true
+            loadingState.errorMessage = nil
+            self.state = loadingState
         }
 
         do {
+            let apiRequestStartTime = CFAbsoluteTimeGetCurrent()
             let response: EstateGeolocationResponseDTO = try await networkService.request(
                 EstateRouter.geolocation(
                     category: nil,
@@ -128,6 +140,7 @@ final class MapViewModel: ObservableObject {
                     maxDistance: event.maxDistance
                 )
             )
+            let apiRequestTime = CFAbsoluteTimeGetCurrent() - apiRequestStartTime
 
             let estates = response.data ?? []
 
@@ -141,13 +154,28 @@ final class MapViewModel: ObservableObject {
             // Perform clustering
             let clusterResult = await performClustering(points: quadPoints, maxDistance: event.maxDistance)
 
+            // 마커 렌더링 시간 측정 시작
+            let markerRenderStartTime = CFAbsoluteTimeGetCurrent()
+
+            // Atomic state update: Single objectWillChange notification
             await MainActor.run {
-                self.mapPoints = mapPoints
-                self.quadPoints = quadPoints
-                self.clusters = clusterResult.clusterCenters()
-                self.noisePoints = clusterResult.noise
-                self.isLoading = false
+                var newState = MapState()
+                newState.mapPoints = mapPoints
+                newState.quadPoints = quadPoints
+                newState.clusters = clusterResult.clusterCenters()
+                newState.noisePoints = clusterResult.noise
+                newState.isLoading = false
+                newState.errorMessage = nil
+                self.state = newState
             }
+
+            let markerRenderTime = CFAbsoluteTimeGetCurrent() - markerRenderStartTime
+            let totalPipelineTime = CFAbsoluteTimeGetCurrent() - pipelineStartTime
+            
+            Logger.network.info("""
+            ⏳ EstateGeolocationResponse Success:
+                Total Time: \(String(format: "%.2f", apiRequestTime * 1000))ms
+            """)
 
             Logger.network.info("""
             ✅ Geolocation API Success:
@@ -156,6 +184,14 @@ final class MapViewModel: ObservableObject {
                Results: \(estates.count) estates
                MapPoints: \(mapPoints.count), QuadPoints: \(quadPoints.count)
                Clusters: \(clusterResult.clusterCount), Noise: \(clusterResult.noise.count)
+            """)
+
+            Logger.default.info("""
+            🖼️ Marker Rendering Performance:
+               UI Update Time: \(String(format: "%.2f", markerRenderTime * 1000))ms
+               Total Pipeline Time: \(String(format: "%.2f", totalPipelineTime * 1000))ms
+               Cluster Markers: \(clusterResult.clusterCount)
+               Individual Markers: \(clusterResult.noise.count)
             """)
 
             // Log individual results for debugging
@@ -176,14 +212,18 @@ final class MapViewModel: ObservableObject {
         } catch let error as NetworkError {
             Logger.network.error("❌ Geolocation API Failed: \(error.localizedDescription)")
             await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
+                var errorState = self.state
+                errorState.isLoading = false
+                errorState.errorMessage = error.localizedDescription
+                self.state = errorState
             }
         } catch {
             Logger.network.error("❌ Unknown error: \(error.localizedDescription)")
             await MainActor.run {
-                self.errorMessage = "주변 매물을 불러오는데 실패했습니다."
-                self.isLoading = false
+                var errorState = self.state
+                errorState.isLoading = false
+                errorState.errorMessage = "주변 매물을 불러오는데 실패했습니다."
+                self.state = errorState
             }
         }
     }
@@ -218,43 +258,35 @@ final class MapViewModel: ObservableObject {
 
     // MARK: - Clustering
 
-    /// 클러스터링 수행 (줌 레벨 기반)
+    /// 클러스터링 수행 (하이브리드 전략 패턴)
     /// - Parameters:
     ///   - points: 클러스터링할 QuadPoint 배열
     ///   - maxDistance: 지도 반경 (미터)
     /// - Returns: ClusterResult
     private func performClustering(points: [QuadPoint], maxDistance: Int) async -> ClusterResult {
-        // 줌 레벨(반경)에 따른 적응형 epsilon과 minPoints
-        let epsilon = calculateAdaptiveEpsilon(maxDistance: maxDistance)
-        let minPoints = calculateAdaptiveMinPts(maxDistance: maxDistance)
-
-        // ClusteringService를 통해 클러스터링 수행
-        // 모든 줌 레벨에서 클러스터링을 수행하여:
-        // - 밀집 지역: 클러스터로 표시
-        // - 떨어진 점: 노이즈(개별 마커)로 표시
-        return await clusteringService.cluster(
-            points: points,
-            epsilon: epsilon,
-            minPoints: minPoints
+        // ClusteringContext 생성 (적응형 파라미터 자동 계산)
+        let context = ClusteringContext(
+            maxDistance: maxDistance,
+            dataSize: points.count,
+            filterState: filterState
         )
-    }
 
-    /// 줌 레벨(반경)에 따른 적응형 epsilon 계산
-    /// - Parameter maxDistance: 지도 반경 (미터)
-    /// - Returns: 적절한 epsilon 값 (미터)
-    private func calculateAdaptiveEpsilon(maxDistance: Int) -> Double {
-        // 줌 아웃할수록 (반경이 클수록) 큰 epsilon 사용 (넓은 범위 클러스터링)
-        // 줌 인할수록 (반경이 작을수록) 작은 epsilon 사용 (세밀한 클러스터링)
-        SpatialConstants.epsilon(forMaxDistance: maxDistance)
-    }
-    
-    /// 줌 레벨(반경)에 따른 적응형 minPts 계산
-    /// - Parameter maxDistance: 지도 반경 (미터)
-    /// - Returns: 적절한 minPts 값 (미터)
-    private func calculateAdaptiveMinPts(maxDistance: Int) -> Int {
-        // 줌 아웃할수록 (반경이 클수록) 큰 epsilon 사용 (넓은 범위 클러스터링)
-        // 줌 인할수록 (반경이 작을수록) 작은 epsilon 사용 (세밀한 클러스터링)
-        SpatialConstants.minPoints(forMaxDistance: maxDistance)
+        // ClusteringStrategyManager를 통해 전략 선택 및 클러스터링 수행
+        let result = await clusteringManager.cluster(points: points, context: context)
+
+        // Enhanced metrics 로깅
+        if let mode = result.mode, let executionTime = result.executionTime {
+            let modeName = mode == .gridBased ? "Grid-based" : "DBSCAN"
+            Logger.default.info("""
+            🎯 Clustering Complete:
+               Mode: \(modeName)
+               Clusters: \(result.clusterCount)
+               Noise: \(result.noise.count)
+               Time: \(String(format: "%.2f", executionTime * 1000))ms
+            """)
+        }
+
+        return result
     }
 }
 

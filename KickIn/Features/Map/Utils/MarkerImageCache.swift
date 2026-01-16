@@ -47,8 +47,9 @@ final class MarkerImageCache {
         }
 
         // Create new image from SwiftUI View
+        // Note: ClusterMarkerView is 40x40 but we need extra space for any effects
         let view = ClusterMarkerView(count: count)
-        let size = CGSize(width: 40, height: 40)
+        let size = CGSize(width: 60, height: 60)
 
         guard let image = view.asUIImage(size: size) else {
             Logger().error("Failed to render cluster marker for count: \(count)")
@@ -77,8 +78,9 @@ final class MarkerImageCache {
         }
 
         // Create marker with placeholder (image will be loaded asynchronously)
+        // Note: EstateMarkerView is 60x78 but has .padding(5) + shadow, so we need 70x88
         let view = EstateMarkerView(image: nil, priceText: priceText)
-        let size = CGSize(width: 60, height: 78)
+        let size = CGSize(width: 70, height: 88)
 
         guard let image = view.asUIImage(size: size) else {
             Logger().error("Failed to render estate marker for price: \(priceText)")
@@ -119,8 +121,9 @@ final class MarkerImageCache {
         guard let propertyImage = propertyImage else { return }
 
         // Create new marker with loaded image
+        // Note: EstateMarkerView is 60x78 but has .padding(5) + shadow, so we need 70x88
         let view = EstateMarkerView(image: propertyImage, priceText: priceText)
-        let size = CGSize(width: 60, height: 78)
+        let size = CGSize(width: 70, height: 88)
 
         guard let image = view.asUIImage(size: size) else {
             Logger().error("Failed to render estate marker with loaded image: \(priceText)")
@@ -164,21 +167,21 @@ final class MarkerImageCache {
     // MARK: - Private Helpers
 
     private func createFallbackClusterImage() -> UIImage {
-        // Simple gray circle as fallback
-        let size: CGFloat = 40
+        // Simple gray circle as fallback (with padding space)
+        let size: CGFloat = 50
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         return renderer.image { context in
             UIColor.gray.setFill()
-            context.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+            context.cgContext.fillEllipse(in: CGRect(x: 5, y: 5, width: 40, height: 40))
         }
     }
 
     private func createFallbackEstateImage() -> UIImage {
-        // Simple gray rectangle as fallback
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 60, height: 78))
+        // Simple gray rectangle as fallback (with padding space)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 70, height: 88))
         return renderer.image { context in
             UIColor.lightGray.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 60, height: 78))
+            context.fill(CGRect(x: 5, y: 5, width: 60, height: 78))
         }
     }
 }

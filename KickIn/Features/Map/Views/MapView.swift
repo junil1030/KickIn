@@ -37,7 +37,7 @@ struct MapView: View {
             }
 
             // Loading indicator
-            if viewModel.isLoading {
+            if viewModel.state.isLoading {
                 VStack {
                     Spacer()
                     HStack {
@@ -55,7 +55,7 @@ struct MapView: View {
             }
 
             // Error message
-            if let errorMessage = viewModel.errorMessage {
+            if let errorMessage = viewModel.state.errorMessage {
                 VStack {
                     Spacer()
                     Text(errorMessage)
