@@ -78,6 +78,8 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>audio</string>
+		<string>airplay</string>
 	</array>
 	<key>api_key</key>
 	<string>$(API_KEY)</string>
