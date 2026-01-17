@@ -18,6 +18,7 @@ struct VideoPlayerOverlayView: View {
     let onQualitySelect: (VideoStreamQualityDTO) -> Void
     let onSeek: (TimeInterval) -> Void
     let onInteraction: () -> Void
+    let onPIPTap: () -> Void
 
     var body: some View {
         ZStack {
@@ -31,7 +32,7 @@ struct VideoPlayerOverlayView: View {
 
             // 3단 레이아웃
             VStack {
-                // Top bar: CC, 화질 버튼
+                // Top bar: CC, PIP, 화질 버튼
                 HStack {
                     Spacer()
                     Button(action: {
@@ -46,6 +47,23 @@ struct VideoPlayerOverlayView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    
+                    
+                    // PIP 버튼 (PIP 가능 시에만 표시)
+                    if playerState.isPictureInPicturePossible {
+                        Button(action: {
+                            onPIPTap()
+                            onInteraction()
+                        }) {
+                            Image(systemName: playerState.isPictureInPictureActive ? "pip.exit" : "pip.enter")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(playerState.isPictureInPictureActive ? Color.deepCoast : Color.gray0)
+                                .padding(10)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     Button(action: {
                         toggleQualityMenu()
