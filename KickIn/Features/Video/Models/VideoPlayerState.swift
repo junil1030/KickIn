@@ -16,6 +16,8 @@ struct VideoPlayerState {
     var isLongPressing: Bool = false
     var seekFeedback: SeekFeedback? = nil
     var showOverlay: Bool = true
+    var isPictureInPictureActive: Bool = false
+    var isPictureInPicturePossible: Bool = false
 }
 
 struct SeekFeedback {

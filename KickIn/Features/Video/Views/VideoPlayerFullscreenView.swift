@@ -23,8 +23,14 @@ struct VideoPlayerFullscreenView: View {
             if let player = viewModel.player {
                 GeometryReader { geometry in
                     ZStack {
-                        VideoPlayerContainerRepresentable(player: player)
-                            .ignoresSafeArea()
+                        VideoPlayerContainerRepresentable(
+                            player: player,
+                            pipDelegate: viewModel,
+                            onViewCreated: { containerView in
+                                viewModel.playerContainerView = containerView
+                            }
+                        )
+                        .ignoresSafeArea()
 
                         VideoPlayerGestureView(
                             geometry: geometry,
@@ -59,6 +65,9 @@ struct VideoPlayerFullscreenView: View {
                                 },
                                 onInteraction: {
                                     viewModel.resetOverlayTimer()
+                                },
+                                onPIPTap: {
+                                    viewModel.togglePictureInPicture()
                                 }
                             )
                         }

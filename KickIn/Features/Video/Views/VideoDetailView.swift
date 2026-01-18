@@ -92,9 +92,15 @@ struct VideoDetailView: View {
             if let player = viewModel.player {
                 GeometryReader { geometry in
                     ZStack {
-                        VideoPlayerContainerRepresentable(player: player)
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        VideoPlayerContainerRepresentable(
+                            player: player,
+                            pipDelegate: viewModel,
+                            onViewCreated: { containerView in
+                                viewModel.playerContainerView = containerView
+                            }
+                        )
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         VideoPlayerGestureView(
                             geometry: geometry,
@@ -129,6 +135,9 @@ struct VideoDetailView: View {
                                 },
                                 onInteraction: {
                                     viewModel.resetOverlayTimer()
+                                },
+                                onPIPTap: {
+                                    viewModel.togglePictureInPicture()
                                 }
                             )
                         }

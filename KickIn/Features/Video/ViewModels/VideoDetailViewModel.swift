@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import AVFoundation
+import UIKit
 import OSLog
 
 final class VideoDetailViewModel: ObservableObject {
@@ -23,21 +24,39 @@ final class VideoDetailViewModel: ObservableObject {
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
+    private let audioSessionService = AudioSessionService.shared
     private let videoId: String
     private var playerStatusObserver: NSKeyValueObservation?
     private var resourceLoaderDelegate: HLSResourceLoaderDelegate?
     private let resourceLoaderQueue = DispatchQueue(label: "hls.resource.loader")
     private var qualitySwitchTask: Task<Void, Never>?
     private var overlayHideTimer: Timer?
+    private var backgroundObserver: NSObjectProtocol?
+
+    weak var playerContainerView: VideoPlayerContainerView?
 
     init(videoId: String) {
         self.videoId = videoId
+        setupBackgroundObserver()
+    }
+
+    deinit {
+        if let observer = backgroundObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func setPlayer(with url: URL) async {
 #if DEBUG
         await logPlaylistHead(url)
 #endif
+
+        // 백그라운드 재생을 위한 오디오 세션 구성
+        do {
+            try audioSessionService.configureForPlayback()
+        } catch {
+            Logger.network.error("❌ Failed to configure audio session: \(error.localizedDescription)")
+        }
 
         let item: AVPlayerItem
 
@@ -73,6 +92,9 @@ final class VideoDetailViewModel: ObservableObject {
     }
 
     func stopPlayer() {
+        // PIP 중지
+        playerContainerView?.stopPictureInPicture()
+
         player?.pause()
         player = nil
         playerStatusObserver = nil
@@ -81,6 +103,9 @@ final class VideoDetailViewModel: ObservableObject {
         qualitySwitchTask = nil
         overlayHideTimer?.invalidate()
         overlayHideTimer = nil
+
+        // 오디오 세션 비활성화
+        audioSessionService.deactivateSession()
     }
 
     func loadStream() async {
@@ -437,5 +462,97 @@ final class VideoDetailViewModel: ObservableObject {
         } catch {
             Logger.network.error("❌ Playlist fetch failed: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - PIP Control
+
+    func startPictureInPicture() {
+        playerContainerView?.startPictureInPicture()
+    }
+
+    func stopPictureInPicture() {
+        playerContainerView?.stopPictureInPicture()
+    }
+
+    func togglePictureInPicture() {
+        if playerState.isPictureInPictureActive {
+            stopPictureInPicture()
+        } else {
+            startPictureInPicture()
+        }
+    }
+
+    // MARK: - Background Observer
+
+    private func setupBackgroundObserver() {
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleAppDidEnterBackground()
+        }
+    }
+
+    private func handleAppDidEnterBackground() {
+        Logger.network.info("📱 App entered background - checking PIP conditions")
+        Logger.network.info("  - isPlaying: \(self.playerState.isPlaying)")
+        Logger.network.info("  - isPictureInPicturePossible: \(self.playerState.isPictureInPicturePossible)")
+        Logger.network.info("  - isPictureInPictureActive: \(self.playerState.isPictureInPictureActive)")
+        Logger.network.info("  - player exists: \(self.player != nil)")
+        Logger.network.info("  - playerContainerView exists: \(self.playerContainerView != nil)")
+
+        // 비디오 재생 중이고, PIP 가능하며, 아직 PIP 모드가 아닐 때 자동으로 PIP 시작
+        guard playerState.isPlaying else {
+            Logger.network.warning("⚠️ Cannot auto-start PIP: video not playing")
+            return
+        }
+
+        guard playerState.isPictureInPicturePossible else {
+            Logger.network.warning("⚠️ Cannot auto-start PIP: PIP not possible")
+            return
+        }
+
+        guard !playerState.isPictureInPictureActive else {
+            Logger.network.info("ℹ️ PIP already active, skipping auto-start")
+            return
+        }
+
+        Logger.network.info("📱 Auto-starting PIP due to backgrounding")
+
+        // 백그라운드 전환 시 약간의 딜레이를 주어 안정적으로 PIP 시작
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.startPictureInPicture()
+        }
+    }
+}
+
+// MARK: - PIPControllerDelegate
+
+extension VideoDetailViewModel: PIPControllerDelegate {
+
+    func pipWillStart() {
+        Logger.network.info("🎬 ViewModel: PIP will start")
+    }
+
+    func pipDidStart() {
+        Logger.network.info("✅ ViewModel: PIP started")
+        playerState.isPictureInPictureActive = true
+        playerState.showOverlay = false
+    }
+
+    func pipWillStop() {
+        Logger.network.info("🎬 ViewModel: PIP will stop")
+    }
+
+    func pipDidStop() {
+        Logger.network.info("✅ ViewModel: PIP stopped")
+        playerState.isPictureInPictureActive = false
+        showOverlayTemporarily()
+    }
+
+    func pipPossibilityChanged(_ isPossible: Bool) {
+        Logger.network.info("🔄 ViewModel: PIP possibility changed to \(isPossible)")
+        playerState.isPictureInPicturePossible = isPossible
     }
 }
