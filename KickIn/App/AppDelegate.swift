@@ -13,7 +13,7 @@ import iamport_ios
 import RealmSwift
 
 class AppDelegate: NSObject, UIApplicationDelegate {
-    
+
     private let tokenStorage = NetworkServiceFactory.shared.getTokenStorage()
     private let paymentViewModel = PaymentViewModel()
     
@@ -59,16 +59,59 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Messaging.messaging().apnsToken = deviceToken
     }
+
+    // 포그라운드에서 알림을 받았을 때 (앱이 실행 중일 때)
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        let userInfo = notification.request.content.userInfo
+
+
+        Task { @MainActor in
+            // 현재 활성화된 채팅방인지 확인
+            if let roomId = userInfo["roomId"] as? String {
+                let isActiveChatRoom = ChatStateManager.shared.isActiveChatRoom(roomId)
+
+                if isActiveChatRoom {
+                    completionHandler([])
+                } else {
+                    completionHandler([.banner, .sound, .badge])
+                }
+            } else {
+                // roomId가 없으면 일반 알림으로 표시
+                completionHandler([.banner, .sound, .badge])
+            }
+        }
+    }
+
+    // 알림을 탭했을 때 (백그라운드/종료 상태에서)
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+
+        Task { @MainActor in
+            // DeepLinkManager를 통해 채팅방으로 이동
+            DeepLinkManager.shared.handlePushNotification(userInfo: userInfo)
+        }
+
+        completionHandler()
+    }
 }
 
 extension AppDelegate: MessagingDelegate {
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        
+
         guard let fcmToken = fcmToken else { return }
-        
+
         Logger.auth.info("Firebase registration token: \(String(describing: fcmToken))")
-        
+
         Task {
+            // Keychain에 저장 (로그인 시 서버에 전송됨)
             await tokenStorage.setFCMToken(fcmToken)
         }
     }
