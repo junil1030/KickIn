@@ -132,6 +132,11 @@ struct ChatDetailView: View {
     // MARK: - Private Methods
 
     private func setupAndLoad() async {
+        // Register with chat state manager (for push notification suppression)
+        await MainActor.run {
+            ChatStateManager.shared.enterChatRoom(roomId)
+        }
+
         // Register with lifecycle manager
         await MainActor.run {
             lifecycleManager.registerActiveChatRoom(
@@ -158,6 +163,7 @@ struct ChatDetailView: View {
         reconnectionCancellable?.cancel()
         reconnectionCancellable = nil
         lifecycleManager.unregisterActiveChatRoom()
+        ChatStateManager.shared.leaveChatRoom()
         viewModel.cleanup()
     }
 }
