@@ -9,10 +9,12 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab: TabItem = .home
-    
+    @ObservedObject private var deepLinkManager = DeepLinkManager.shared
+
     enum TabItem {
         case home
         case interest
+        case map
         case chat
         case profile
     }
@@ -67,9 +69,10 @@ struct MainTabView: View {
                         Image(systemName: "map")
                     }
                 }
+                .tag(TabItem.map)
                 
                 NavigationStack {
-                    ChatRoomListView()
+                    ChatRoomListView(pendingChatRoomId: $deepLinkManager.pendingChatRoomId)
                 }
                 .tabItem {
                     Label {
@@ -95,6 +98,16 @@ struct MainTabView: View {
             }
             .tint(Color.gray90)
             .environment(\.screenSize, screenSize)
+            .onChange(of: deepLinkManager.shouldNavigateToChat) { oldValue, newValue in
+                if newValue {
+                    selectedTab = .chat
+                }
+            }
+            .onAppear {
+                if deepLinkManager.shouldNavigateToChat {
+                    selectedTab = .chat
+                }
+            }
         }
     }
 }
