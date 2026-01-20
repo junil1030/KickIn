@@ -9,11 +9,26 @@ import SwiftUI
 
 struct MapView: View {
     @StateObject private var viewModel = MapViewModel()
+    @State private var showFilterSheet = false
+    @State private var selectedSection: FilterSection?
 
     var body: some View {
         ZStack {
             NaverMapView(viewModel: viewModel)
                 .ignoresSafeArea()
+
+            // Filter header (top)
+            VStack {
+                MainHeaderView(
+                    showFilterSheet: $showFilterSheet,
+                    selectedSection: $selectedSection,
+                    currentFilter: viewModel.filterState
+                )
+                .padding(.top, 8)
+                .padding(.horizontal, 16)
+
+                Spacer()
+            }
 
             // Current location button (bottom right)
             VStack {
@@ -82,6 +97,18 @@ struct MapView: View {
                 EmptyView()
             }
             .hidden()
+        }
+        .sheet(isPresented: $showFilterSheet) {
+            FilterDetailView(
+                viewModel: FilterViewModel(currentFilter: viewModel.filterState),
+                selectedSection: $selectedSection,
+                onApply: { filter in
+                    viewModel.updateFilter(filter)
+                },
+                onReset: {
+                    viewModel.updateFilter(EstateFilter())
+                }
+            )
         }
     }
 }

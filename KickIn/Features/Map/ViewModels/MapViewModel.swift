@@ -37,6 +37,13 @@ final class MapViewModel: ObservableObject {
     // Combine subject for camera changes (user-initiated only)
     private let cameraChangeSubject = PassthroughSubject<CameraChangeEvent, Never>()
 
+    // 마지막으로 계산된 maxDistance (필터 적용 시 재사용)
+    private var lastMaxDistance: Int = 5000  // 기본값 5km
+
+    // 원본 데이터 저장 (클라이언트 사이드 필터링용)
+    private var allMapPoints: [MapPoint] = []
+    private var allQuadPoints: [QuadPoint] = []
+
     // MARK: - Initialization
     init(clusteringManager: ClusteringStrategyManager = ClusteringStrategyManager()) {
         self.clusteringManager = clusteringManager
@@ -93,6 +100,18 @@ final class MapViewModel: ObservableObject {
         state = newState
     }
 
+    /// Update filter and re-apply to cached data
+    func updateFilter(_ filter: EstateFilter) {
+        self.filterState = filter.isActive ? filter : nil
+
+        // 원본 데이터가 있으면 필터링 + 클러스터링만 재적용 (API 호출 없음)
+        if !allMapPoints.isEmpty {
+            Task {
+                await applyFilterAndCluster()
+            }
+        }
+    }
+
     /// Called from NaverMapView when camera changes (only user-initiated)
     func handleCameraChange(center: CLLocationCoordinate2D,
                            southWest: CLLocationCoordinate2D,
@@ -106,6 +125,9 @@ final class MapViewModel: ObservableObject {
 
         // Calculate radius using Haversine distance
         let maxDistance = calculateRadius(from: southWest, to: northEast)
+
+        // 마지막 maxDistance 저장 (필터 적용 시 재사용)
+        lastMaxDistance = maxDistance
 
         Logger.ui.info("""
         🗺️ Camera change detected:
@@ -159,8 +181,21 @@ final class MapViewModel: ObservableObject {
                 return estate.toQuadPoint(with: mapPoint)
             }
 
+            // 원본 데이터 저장 (클라이언트 사이드 필터링용)
+            await MainActor.run {
+                self.allMapPoints = mapPoints
+                self.allQuadPoints = quadPoints
+            }
+
+            // 필터링 + 클러스터링 적용
+            let (filteredMapPoints, filteredQuadPoints) = applyFilter(
+                mapPoints: mapPoints,
+                quadPoints: quadPoints,
+                filter: filterState
+            )
+
             // Perform clustering
-            let clusterResult = await performClustering(points: quadPoints, maxDistance: event.maxDistance)
+            let clusterResult = await performClustering(points: filteredQuadPoints, maxDistance: event.maxDistance)
 
             // 마커 렌더링 시간 측정 시작
             let markerRenderStartTime = CFAbsoluteTimeGetCurrent()
@@ -168,8 +203,8 @@ final class MapViewModel: ObservableObject {
             // Atomic state update: Single objectWillChange notification
             await MainActor.run {
                 var newState = MapState()
-                newState.mapPoints = mapPoints
-                newState.quadPoints = quadPoints
+                newState.mapPoints = filteredMapPoints
+                newState.quadPoints = filteredQuadPoints
                 newState.clusters = clusterResult.clusterCenters()
                 newState.noisePoints = clusterResult.noise
                 newState.isLoading = false
@@ -190,7 +225,8 @@ final class MapViewModel: ObservableObject {
                Center: (\(event.center.latitude), \(event.center.longitude))
                Max Distance: \(event.maxDistance)m
                Results: \(estates.count) estates
-               MapPoints: \(mapPoints.count), QuadPoints: \(quadPoints.count)
+               Original: \(mapPoints.count) estates
+               Filtered: \(filteredMapPoints.count) estates
                Clusters: \(clusterResult.clusterCount), Noise: \(clusterResult.noise.count)
             """)
 
@@ -262,6 +298,141 @@ final class MapViewModel: ObservableObject {
         let c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
         return earthRadius * c
+    }
+
+    // MARK: - Filtering
+
+    /// 필터를 적용하여 MapPoint와 QuadPoint 배열을 필터링
+    /// - Parameters:
+    ///   - mapPoints: 원본 MapPoint 배열
+    ///   - quadPoints: 원본 QuadPoint 배열
+    ///   - filter: 적용할 EstateFilter (nil이면 필터링 안함)
+    /// - Returns: 필터링된 (MapPoint, QuadPoint) 튜플
+    private func applyFilter(
+        mapPoints: [MapPoint],
+        quadPoints: [QuadPoint],
+        filter: EstateFilter?
+    ) -> ([MapPoint], [QuadPoint]) {
+        guard let filter = filter, filter.isActive else {
+            // 필터가 없거나 비활성화된 경우 원본 반환
+            return (mapPoints, quadPoints)
+        }
+
+        // MapPoint 필터링
+        let filteredMapPoints = mapPoints.filter { mapPoint in
+            // 1. 거래 유형 필터
+            if let transactionType = filter.transactionType {
+                switch transactionType {
+                case .jeonse:
+                    // 전세: 월세가 0
+                    if mapPoint.monthly_rent > 0 { return false }
+                case .monthly:
+                    // 월세: 월세가 0보다 큼
+                    if mapPoint.monthly_rent == 0 { return false }
+                }
+            }
+
+            // 2. 보증금 범위 필터
+            if let depositRange = filter.depositRange {
+                if mapPoint.deposit < depositRange.lowerBound || mapPoint.deposit > depositRange.upperBound {
+                    return false
+                }
+            }
+
+            // 3. 월세 범위 필터
+            if let monthlyRentRange = filter.monthlyRentRange {
+                if mapPoint.monthly_rent < monthlyRentRange.lowerBound || mapPoint.monthly_rent > monthlyRentRange.upperBound {
+                    return false
+                }
+            }
+
+            // 4. 면적 범위 필터
+            if let areaRange = filter.areaRange {
+                if mapPoint.area < areaRange.lowerBound || mapPoint.area > areaRange.upperBound {
+                    return false
+                }
+            }
+
+            // 5. 층수 필터
+            if !filter.selectedFloors.isEmpty && !filter.selectedFloors.contains(.all) {
+                var floorMatched = false
+                for floorOption in filter.selectedFloors {
+                    switch floorOption {
+                    case .all:
+                        floorMatched = true
+                    case .semiBasement:
+                        // 반지하: 0층 이하 (음수 포함)
+                        if mapPoint.floors <= 0 { floorMatched = true }
+                    case .firstFloor:
+                        // 1층
+                        if mapPoint.floors == 1 { floorMatched = true }
+                    case .aboveGround:
+                        // 지상층: 2층 이상
+                        if mapPoint.floors >= 2 { floorMatched = true }
+                    case .rooftop:
+                        // 옥탑: 특정 값 또는 로직 필요 (현재는 건너뜀)
+                        // TODO: 옥탑 판단 로직 추가 필요
+                        break
+                    }
+                }
+                if !floorMatched { return false }
+            }
+
+            // 6. 편의시설 필터
+            // TODO: MapPoint에 amenities 정보가 추가되면 구현
+            // if !filter.selectedAmenities.isEmpty { ... }
+
+            return true
+        }
+
+        // 필터링된 MapPoint의 ID 집합
+        let filteredIds = Set(filteredMapPoints.map { "\($0.longitude),\($0.latitude)" })
+
+        // QuadPoint 필터링 (MapPoint와 동일한 위치만 유지)
+        let filteredQuadPoints = quadPoints.filter { quadPoint in
+            let key = "\(quadPoint.coordinate.longitude),\(quadPoint.coordinate.latitude)"
+            return filteredIds.contains(key)
+        }
+
+        return (filteredMapPoints, filteredQuadPoints)
+    }
+
+    /// 저장된 원본 데이터에 필터를 적용하고 클러스터링 재수행
+    private func applyFilterAndCluster() async {
+        let filterStartTime = CFAbsoluteTimeGetCurrent()
+
+        // 필터링 적용
+        let (filteredMapPoints, filteredQuadPoints) = applyFilter(
+            mapPoints: allMapPoints,
+            quadPoints: allQuadPoints,
+            filter: filterState
+        )
+
+        // 클러스터링 수행
+        let clusterResult = await performClustering(points: filteredQuadPoints, maxDistance: lastMaxDistance)
+
+        let totalTime = CFAbsoluteTimeGetCurrent() - filterStartTime
+
+        // State 업데이트
+        await MainActor.run {
+            var newState = MapState()
+            newState.mapPoints = filteredMapPoints
+            newState.quadPoints = filteredQuadPoints
+            newState.clusters = clusterResult.clusterCenters()
+            newState.noisePoints = clusterResult.noise
+            newState.isLoading = false
+            newState.errorMessage = nil
+            self.state = newState
+
+            Logger.default.info("""
+            🔍 Filter Applied:
+               Original: \(self.allMapPoints.count) estates
+               Filtered: \(filteredMapPoints.count) estates
+               Clusters: \(clusterResult.clusterCount)
+               Noise: \(clusterResult.noise.count)
+               Time: \(String(format: "%.2f", totalTime * 1000))ms
+            """)
+        }
     }
 
     // MARK: - Clustering
