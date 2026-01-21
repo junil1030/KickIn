@@ -11,17 +11,19 @@ struct MainHeaderView: View {
     @Binding var showFilterSheet: Bool
     @Binding var selectedSection: FilterSection?
     let currentFilter: EstateFilter?
-
+    
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(FilterSection.allCases) { section in
-                filterButton(for: section)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(FilterSection.allCases) { section in
+                    filterButton(for: section)
+                }
             }
         }
     }
-
+    
     // MARK: - Private Views
-
+    
     @ViewBuilder
     private func filterButton(for section: FilterSection) -> some View {
         Button(action: {
@@ -32,7 +34,7 @@ struct MainHeaderView: View {
                 Text(section.rawValue)
                     .font(.body2(.pretendardMedium))
                     .foregroundColor(isActive(section) ? .brightWood : .gray75)
-
+                
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(isActive(section) ? .brightWood : .gray75)
@@ -47,12 +49,12 @@ struct MainHeaderView: View {
             .cornerRadius(8)
         }
     }
-
+    
     // MARK: - Private Methods
-
+    
     private func isActive(_ section: FilterSection) -> Bool {
         guard let filter = currentFilter else { return false }
-
+        
         switch section {
         case .transactionType:
             return filter.transactionType != nil
