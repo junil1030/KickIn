@@ -7,17 +7,29 @@
 
 import Foundation
 
-// MARK: - EstateFilter (Placeholder)
+// MARK: - EstateFilter
 
-/// 매물 필터 (향후 구현 예정)
-///
-/// TODO: 필터 기능 구현 시 다음 프로퍼티들 추가 예정:
-/// - category: EstateCategory? (원룸, 투룸, 오피스텔 등)
-/// - priceRange: ClosedRange<Int>? (가격 범위)
-/// - areaRange: ClosedRange<Int>? (면적 범위)
-/// - transactionType: TransactionType? (월세, 전세, 매매)
-struct EstateFilter {
-    // Empty placeholder - 향후 확장 예정
+/// 매물 필터
+struct EstateFilter: Equatable {
+    var transactionType: TransactionType?
+    var depositRange: ClosedRange<Int>?
+    var monthlyRentRange: ClosedRange<Int>?
+    var areaRange: ClosedRange<Double>?
+    var selectedFloors: Set<FloorOption> = []
+    var selectedAmenities: Set<AmenityOption> = []
+
+    var isActive: Bool {
+        transactionType != nil ||
+        depositRange != nil ||
+        monthlyRentRange != nil ||
+        areaRange != nil ||
+        !selectedFloors.isEmpty ||
+        !selectedAmenities.isEmpty
+    }
+
+    mutating func reset() {
+        self = EstateFilter()
+    }
 }
 
 // MARK: - ClusteringContext
