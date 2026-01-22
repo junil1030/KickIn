@@ -48,7 +48,6 @@ struct ChatDetailView: View {
                                 .padding()
                         }
 
-                        // Phase 4: @ObservedResults 기반 displayedChatItems 사용
                         ForEach(viewModel.displayedChatItems.reversed()) { item in
                             switch item {
                             case .dateHeader(_, let formatted):
@@ -61,6 +60,7 @@ struct ChatDetailView: View {
 
                             case .message(let config):
                                 ChatMessageBubble(
+                                    viewModel: viewModel,
                                     config: config,
                                     myUserId: viewModel.myUserId
                                 )

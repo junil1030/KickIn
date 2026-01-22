@@ -10,6 +10,7 @@ import CachingKit
 
 struct ChatMessageBubble: View {
     @Environment(\.cachingKit) private var cachingKit
+    @ObservedObject var viewModel: ChatDetailViewModel
 
     let config: MessageDisplayConfig
     let myUserId: String
@@ -23,6 +24,14 @@ struct ChatMessageBubble: View {
 
     private var mediaItems: [MediaItem] {
         message.mediaItems(roomId: config.roomId ?? "")
+    }
+
+    private var linkMetadata: [LinkMetadata] {
+        let metadata = viewModel.getLinkMetadata(for: message.id)
+        if !metadata.isEmpty {
+            print("📎 [ChatMessageBubble] Found \(metadata.count) metadata for message \(message.id)")
+        }
+        return metadata
     }
 
     var body: some View {
@@ -81,13 +90,47 @@ struct ChatMessageBubble: View {
     }
 
     private var messageContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             if let content = message.content, !content.isEmpty {
-                Text(content)
-                    .font(.body2(.pretendardMedium))
-                    .foregroundColor(.gray90)
+                let detectedLinks = message.detectedURLs
+
+                if !detectedLinks.isEmpty {
+                    // URL이 있는 경우 클릭 가능한 텍스트로 표시
+                    ClickableTextView(
+                        text: content,
+                        detectedLinks: detectedLinks
+                    ) { url in
+                        if let url = URL(string: url) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.top, 8)
+                    .padding(.bottom, linkMetadata.isEmpty ? 8 : 6)
+                } else {
+                    // 일반 텍스트
+                    Text(content)
+                        .font(.body2(.pretendardMedium))
+                        .foregroundColor(.gray90)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                }
+            }
+
+            // 링크 프리뷰 카드
+            if !linkMetadata.isEmpty {
+                ForEach(linkMetadata, id: \.url) { metadata in
+                    LinkPreviewCard(
+                        metadata: metadata,
+                        isSentByMe: message.isSentByMe,
+                        hasTextAbove: message.content != nil && !message.content!.isEmpty
+                    )
+                    .onTapGesture {
+                        if let url = URL(string: metadata.url) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
             }
 
             if !mediaItems.isEmpty {
@@ -99,7 +142,8 @@ struct ChatMessageBubble: View {
                         showImageViewer = true
                     }
                 )
-                .padding(8)
+                .padding(linkMetadata.isEmpty ? 8 : 0)
+                .padding(.top, linkMetadata.isEmpty ? 0 : 8)
             }
 
             // 비디오 업로드 상태 표시
