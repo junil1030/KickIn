@@ -17,9 +17,16 @@ struct ChatMessageBubble: View {
 
     @State private var showImageViewer = false
     @State private var selectedImageIndex = 0
+    @State private var selectedUserProfile: UserProfileInfo?
 
     private var message: ChatMessageUIModel {
         config.message
+    }
+
+    struct UserProfileInfo: Identifiable {
+        let id: String
+        let userId: String
+        let userName: String
     }
 
     private var mediaItems: [MediaItem] {
@@ -85,6 +92,12 @@ struct ChatMessageBubble: View {
                 mediaItems: mediaItems,
                 initialIndex: selectedImageIndex,
                 isPresented: $showImageViewer
+            )
+        }
+        .sheet(item: $selectedUserProfile) { profileInfo in
+            UserProfileSheetView(
+                userId: profileInfo.userId,
+                userName: profileInfo.userName
             )
         }
     }
@@ -206,6 +219,16 @@ struct ChatMessageBubble: View {
                 Circle()
                     .fill(Color.gray45)
                     .frame(width: 36, height: 36)
+            }
+        }
+        .onTapGesture {
+            if !message.isSentByMe,
+               let userId = message.senderUserId {
+                selectedUserProfile = UserProfileInfo(
+                    id: userId,
+                    userId: userId,
+                    userName: message.senderNickname
+                )
             }
         }
     }

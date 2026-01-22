@@ -149,6 +149,7 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
                     id: message.chatId,
                     content: message.content,
                     createdAt: message.createdAt,
+                    senderUserId: message.senderUserId,
                     senderNickname: message.senderNickname ?? "알 수 없음",
                     senderProfileImage: message.senderProfileImage,
                     files: Array(message.files),
