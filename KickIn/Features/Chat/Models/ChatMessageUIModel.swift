@@ -97,6 +97,14 @@ struct ChatMessageUIModel: Identifiable, Hashable {
             thumbnail.contains(uuid) && thumbnail.contains("-thumb")
         }
     }
+
+    // MARK: - Link Detection
+
+    /// 메시지 내용에서 감지된 URL 목록
+    var detectedURLs: [DetectedLink] {
+        guard let content = content else { return [] }
+        return content.detectURLs()
+    }
 }
 
 // MARK: - Realm Object → UIModel Extension

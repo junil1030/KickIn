@@ -148,4 +148,26 @@ extension String {
         dateFormatter.timeZone = kstTimeZone
         return dateFormatter.string(from: date)
     }
+
+    /// 텍스트에서 URL을 자동 감지하여 DetectedLink 배열 반환
+    /// NSDataDetector를 사용하여 HTTP(S) URL 찾기
+    /// - Returns: 감지된 URL 목록
+    func detectURLs() -> [DetectedLink] {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return []
+        }
+
+        let nsString = self as NSString
+        let matches = detector.matches(in: self, options: [], range: NSRange(location: 0, length: nsString.length))
+
+        return matches.compactMap { match in
+            guard let url = match.url,
+                  let scheme = url.scheme,
+                  (scheme == "http" || scheme == "https") else {
+                return nil
+            }
+
+            return DetectedLink(url: url.absoluteString, range: match.range)
+        }
+    }
 }
