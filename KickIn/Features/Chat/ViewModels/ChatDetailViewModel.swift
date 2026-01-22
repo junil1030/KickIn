@@ -23,6 +23,7 @@ final class ChatDetailViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var allMediaItems: [MediaItem] = []  // 채팅방 내 모든 미디어
     @Published var videoUploadProgress: [String: VideoUploadProgress] = [:]  // 비디오 업로드 진행률
+    @Published private(set) var linkMetadataByMessage: [String: [LinkMetadata]] = [:]  // 메시지별 링크 메타데이터
 
     // MARK: - Private Properties
 
@@ -41,6 +42,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let repository: ChatMessageRepositoryProtocol
     private let socketService: SocketServiceProtocol
     private let videoUploadService: VideoUploadService
+    private let linkPreviewService: LinkPreviewServiceProtocol
 
     private var connectionTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
@@ -60,13 +62,15 @@ final class ChatDetailViewModel: ObservableObject {
         opponentUserId: String,
         repository: ChatMessageRepositoryProtocol = ChatMessageRepository(),
         socketService: SocketServiceProtocol = SocketService.shared,
-        networkService: NetworkServiceProtocol = NetworkServiceFactory.shared.makeNetworkService()
+        networkService: NetworkServiceProtocol = NetworkServiceFactory.shared.makeNetworkService(),
+        linkPreviewService: LinkPreviewServiceProtocol = LinkPreviewService()
     ) {
         self.roomId = roomId
         self.opponentUserId = opponentUserId
         self.repository = repository
         self.socketService = socketService
         self.videoUploadService = VideoUploadService(networkService: networkService)
+        self.linkPreviewService = linkPreviewService
     }
 
     deinit {
@@ -320,7 +324,7 @@ final class ChatDetailViewModel: ObservableObject {
             }
     }
 
-    /// Observer의 chatItems에서 미디어 아이템 추출
+    /// Observer의 chatItems에서 미디어 아이템 추출 및 링크 프리뷰 fetch
     private func extractMediaFromObservedItems(_ items: [ChatItem]) {
         let mediaItems = items.compactMap { item -> [MediaItem]? in
             guard case .message(let config) = item else { return nil }
@@ -328,6 +332,74 @@ final class ChatDetailViewModel: ObservableObject {
         }.flatMap { $0 }
 
         allMediaItems = mediaItems.sorted { $0.createdAt > $1.createdAt }
+
+        // 링크 프리뷰 fetch (새 메시지에 대해서만)
+        for item in items {
+            guard case .message(let config) = item else { continue }
+            let message = config.message
+
+            // 이미 프리뷰를 fetch한 메시지는 스킵
+            guard linkMetadataByMessage[message.id] == nil else { continue }
+
+            // URL이 있는 메시지만 처리
+            let detectedLinks = message.detectedURLs
+            guard !detectedLinks.isEmpty else { continue }
+
+            // 백그라운드에서 프리뷰 fetch
+            fetchLinkPreviews(for: message)
+        }
+    }
+
+    // MARK: - Link Preview Methods
+
+    /// 메시지의 링크 프리뷰 메타데이터 가져오기
+    /// - Parameter message: 링크를 포함한 메시지
+    func fetchLinkPreviews(for message: ChatMessageUIModel) {
+        let detectedLinks = message.detectedURLs
+        guard !detectedLinks.isEmpty else { return }
+
+        Task(priority: .background) {
+            var metadata: [LinkMetadata] = []
+
+            // 최대 3개의 링크만 병렬 처리
+            let linksToProcess = Array(detectedLinks.prefix(3))
+
+            await withTaskGroup(of: LinkMetadata?.self) { group in
+                for link in linksToProcess {
+                    group.addTask {
+                        do {
+                            let meta = try await self.linkPreviewService.fetchMetadata(for: link.url)
+                            Logger.chat.debug("📎 Metadata fetched - title: \(meta.title ?? "nil"), image: \(meta.imageURL ?? "nil"), isValid: \(meta.isValid)")
+                            return meta.isValid ? meta : nil
+                        } catch {
+                            Logger.chat.debug("Link preview fetch failed for \(link.url): \(error)")
+                            return nil
+                        }
+                    }
+                }
+
+                for await result in group {
+                    if let result = result {
+                        metadata.append(result)
+                    }
+                }
+            }
+
+            Logger.chat.debug("📎 Total metadata collected: \(metadata.count) for message: \(message.id)")
+
+            if !metadata.isEmpty {
+                await MainActor.run {
+                    self.linkMetadataByMessage[message.id] = metadata
+                }
+            }
+        }
+    }
+
+    /// 메시지 ID로 링크 메타데이터 조회
+    /// - Parameter messageId: 메시지 ID
+    /// - Returns: 링크 메타데이터 배열
+    func getLinkMetadata(for messageId: String) -> [LinkMetadata] {
+        linkMetadataByMessage[messageId] ?? []
     }
 
     /// Setup AsyncStream listeners for socket events (extracted for reuse in reconnection)
