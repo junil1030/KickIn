@@ -11,6 +11,7 @@ struct ChatMessageUIModel: Identifiable, Hashable {
     let id: String
     let content: String?
     let createdAt: String
+    let senderUserId: String?
     let senderNickname: String
     let senderProfileImage: String?
     let files: [String]
@@ -24,6 +25,7 @@ struct ChatMessageUIModel: Identifiable, Hashable {
         id: String,
         content: String?,
         createdAt: String,
+        senderUserId: String?,
         senderNickname: String,
         senderProfileImage: String?,
         files: [String],
@@ -35,6 +37,7 @@ struct ChatMessageUIModel: Identifiable, Hashable {
         self.id = id
         self.content = content
         self.createdAt = createdAt
+        self.senderUserId = senderUserId
         self.senderNickname = senderNickname
         self.senderProfileImage = senderProfileImage
         self.files = files
@@ -115,6 +118,7 @@ extension ChatMessageObject {
             id: chatId,
             content: content,
             createdAt: createdAt,
+            senderUserId: senderUserId,
             senderNickname: senderNickname ?? "알 수 없음",
             senderProfileImage: senderProfileImage,
             files: Array(files),
