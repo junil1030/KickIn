@@ -12,6 +12,11 @@ struct PostDetailView: View {
     @Environment(\.cachingKit) private var cachingKit
     @StateObject private var viewModel: PostDetailViewModel
 
+    @State private var showAuthorProfile = false
+    @State private var showCommentAuthorProfile = false
+    @State private var showReplyAuthorProfile = false
+    @State private var selectedAuthor: (userId: String, name: String)?
+
     init(postId: String) {
         _viewModel = StateObject(wrappedValue: PostDetailViewModel(postId: postId))
     }
@@ -39,6 +44,21 @@ struct PostDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .task {
             await viewModel.loadPostDetail()
+        }
+        .sheet(isPresented: $showAuthorProfile) {
+            if let author = selectedAuthor {
+                UserProfileSheetView(userId: author.userId, userName: author.name)
+            }
+        }
+        .sheet(isPresented: $showCommentAuthorProfile) {
+            if let author = selectedAuthor {
+                UserProfileSheetView(userId: author.userId, userName: author.name)
+            }
+        }
+        .sheet(isPresented: $showReplyAuthorProfile) {
+            if let author = selectedAuthor {
+                UserProfileSheetView(userId: author.userId, userName: author.name)
+            }
         }
     }
 
@@ -87,7 +107,12 @@ struct PostDetailView: View {
 
             // 작성자 정보
             HStack(spacing: 8) {
-                authorProfileImageView(post.authorProfileImage, authorName: post.authorName, size: 40)
+                Button {
+                    selectedAuthor = (userId: post.authorId, name: post.authorName)
+                    showAuthorProfile = true
+                } label: {
+                    authorProfileImageView(post.authorProfileImage, authorName: post.authorName, size: 40)
+                }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.authorName)
@@ -142,7 +167,12 @@ struct PostDetailView: View {
     private func commentView(comment: PostCommentUIModel, postAuthorId: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                authorProfileImageView(comment.authorProfileImage, authorName: comment.authorName, size: 36)
+                Button {
+                    selectedAuthor = (userId: comment.authorId, name: comment.authorName)
+                    showCommentAuthorProfile = true
+                } label: {
+                    authorProfileImageView(comment.authorProfileImage, authorName: comment.authorName, size: 36)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     // 작성자 이름
@@ -223,7 +253,12 @@ struct PostDetailView: View {
 
     private func replyView(reply: PostCommentReplyUIModel, postAuthorId: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            authorProfileImageView(reply.authorProfileImage, authorName: reply.authorName, size: 32)
+            Button {
+                selectedAuthor = (userId: reply.authorId, name: reply.authorName)
+                showReplyAuthorProfile = true
+            } label: {
+                authorProfileImageView(reply.authorProfileImage, authorName: reply.authorName, size: 32)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 // 작성자 이름
