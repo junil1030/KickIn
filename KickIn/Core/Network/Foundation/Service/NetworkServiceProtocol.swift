@@ -16,5 +16,10 @@ protocol NetworkServiceProtocol {
         files: [(data: Data, name: String, fileName: String, mimeType: String)],
         progressHandler: @escaping (Double) -> Void
     ) async throws -> T
+    func downloadPDF(
+        from url: URL,
+        to destinationURL: URL,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL
     func updateCredential(accessToken: String, refreshToken: String)
 }

@@ -18,6 +18,7 @@ struct ChatMessageBubble: View {
     @State private var showImageViewer = false
     @State private var selectedImageIndex = 0
     @State private var selectedUserProfile: UserProfileInfo?
+    @State private var selectedPDF: PDFInfo?
 
     private var message: ChatMessageUIModel {
         config.message
@@ -27,6 +28,12 @@ struct ChatMessageBubble: View {
         let id: String
         let userId: String
         let userName: String
+    }
+
+    struct PDFInfo: Identifiable {
+        let id = UUID()
+        let url: URL
+        let fileName: String
     }
 
     private var mediaItems: [MediaItem] {
@@ -94,6 +101,16 @@ struct ChatMessageBubble: View {
                 isPresented: $showImageViewer
             )
         }
+        .sheet(item: $selectedPDF) { pdfInfo in
+            PDFViewerSheet(
+                pdfURL: pdfInfo.url,
+                fileName: pdfInfo.fileName,
+                isPresented: Binding(
+                    get: { selectedPDF != nil },
+                    set: { if !$0 { selectedPDF = nil } }
+                )
+            )
+        }
         .sheet(item: $selectedUserProfile) { profileInfo in
             UserProfileSheetView(
                 userId: profileInfo.userId,
@@ -151,8 +168,22 @@ struct ChatMessageBubble: View {
                     mediaItems: mediaItems,
                     isSentByMe: message.isSentByMe,
                     onImageTap: { item, index in
-                        selectedImageIndex = index
-                        showImageViewer = true
+                        if item.type == .pdf {
+                            print("📄 [PDF Tap] item.url: \(item.url)")
+                            if let url = item.url.thumbnailURL {
+                                print("📄 [PDF Tap] Generated URL: \(url.absoluteString)")
+                                selectedPDF = PDFInfo(
+                                    url: url,
+                                    fileName: item.fileName ?? "document.pdf"
+                                )
+                                print("📄 [PDF Tap] selectedPDF set: \(selectedPDF != nil)")
+                            } else {
+                                print("❌ [PDF Tap] Failed to create URL from: \(item.url)")
+                            }
+                        } else {
+                            selectedImageIndex = index
+                            showImageViewer = true
+                        }
                     }
                 )
                 .padding(linkMetadata.isEmpty ? 8 : 0)

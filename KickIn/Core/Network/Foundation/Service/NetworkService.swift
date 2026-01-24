@@ -223,6 +223,55 @@ final class NetworkService: NetworkServiceProtocol {
         }
     }
 
+    func downloadPDF(
+        from url: URL,
+        to destinationURL: URL,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+        Logger.network.debug("PDF download started: \(url.absoluteString)")
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let destination: DownloadRequest.Destination = { _, _ in
+                return (destinationURL, [.removePreviousFile, .createIntermediateDirectories])
+            }
+
+            session.download(url, to: destination)
+                .downloadProgress { progress in
+                    Task { @MainActor in
+                        Logger.network.debug("Download progress: \(progress.fractionCompleted)")
+                        progressHandler(progress.fractionCompleted)
+                    }
+                }
+                .validate()
+                .response { response in
+                    Logger.network.debug("Download response received")
+                    Logger.network.debug("Status Code: \(response.response?.statusCode ?? 0)")
+
+                    switch response.result {
+                    case .success(let fileURL):
+                        guard let fileURL = fileURL else {
+                            Logger.network.error("Downloaded file URL is nil")
+                            continuation.resume(throwing: NetworkError.unknown)
+                            return
+                        }
+                        Logger.network.info("PDF download succeeded: \(fileURL.lastPathComponent)")
+                        continuation.resume(returning: fileURL)
+                    case .failure(let error):
+                        Logger.network.error("PDF download failed: \(error.localizedDescription)")
+                        if let statusCode = response.response?.statusCode {
+                            Logger.network.error("HTTP Status Code: \(statusCode)")
+                        }
+                        let networkError = self.mapError(
+                            error,
+                            data: nil,
+                            statusCode: response.response?.statusCode
+                        )
+                        continuation.resume(throwing: networkError)
+                    }
+                }
+        }
+    }
+
     // MARK: - Private Methods
 
     private func mapError(_ error: AFError, data: Data?, statusCode: Int?) -> NetworkError {

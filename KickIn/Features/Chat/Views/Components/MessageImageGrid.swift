@@ -134,7 +134,17 @@ struct MessageImageGrid: View {
         if index < mediaItems.count {
             let item = mediaItems[index]
 
-            if item.type == .video {
+            if item.type == .pdf {
+                // PDF: PDFAttachmentCell 표시
+                PDFAttachmentCell(
+                    fileName: item.fileName ?? "document.pdf",
+                    fileSize: item.fileSize,
+                    isSentByMe: isSentByMe,
+                    onTap: {
+                        onImageTap(item, index)
+                    }
+                )
+            } else if item.type == .video {
                 // 비디오: 서버 썸네일 표시
                 if let thumbnailURL = item.thumbnailURL?.thumbnailURL {
                     ZStack {

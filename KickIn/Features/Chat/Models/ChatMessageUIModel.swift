@@ -58,9 +58,10 @@ struct ChatMessageUIModel: Identifiable, Hashable {
 
     func mediaItems(roomId: String) -> [MediaItem] {
         mediaFiles.map { filePath in
+            let fileType = filePath.mediaType
             let thumbnailURL: String
 
-            if filePath.mediaType == .video {
+            if fileType == .video {
                 // 비디오의 경우 매칭되는 썸네일 찾기
                 thumbnailURL = findThumbnail(for: filePath) ?? filePath
             } else {
@@ -70,11 +71,13 @@ struct ChatMessageUIModel: Identifiable, Hashable {
 
             return MediaItem(
                 id: "\(id)_\(filePath)",
-                type: filePath.mediaType,
+                type: fileType,
                 url: filePath,
                 thumbnailURL: thumbnailURL,
                 createdAt: createdAt,
-                roomId: roomId
+                roomId: roomId,
+                fileName: fileType == .pdf ? (filePath as NSString).lastPathComponent : nil,
+                fileSize: nil  // 서버에서 제공하지 않으므로 nil
             )
         }
     }

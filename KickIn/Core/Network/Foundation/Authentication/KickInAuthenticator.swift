@@ -19,9 +19,23 @@ final class KickInAuthenticator: Authenticator {
     }
 
     func apply(_ credential: Credential, to urlRequest: inout URLRequest) {
+        // SeSACKey는 모든 요청에 필수 (중복 방지)
+        if urlRequest.value(forHTTPHeaderField: "SeSACKey") == nil {
+            urlRequest.addValue(APIConfig.apikey, forHTTPHeaderField: "SeSACKey")
+        }
+
+        // AccessToken과 RefreshToken은 있는 경우에만 추가
         guard !credential.accessToken.isEmpty else { return }
-        urlRequest.headers.add(.authorization(credential.accessToken))
-        urlRequest.addValue(credential.refreshToken, forHTTPHeaderField: "refreshToken")
+
+        // Authorization 헤더 중복 방지
+        if urlRequest.value(forHTTPHeaderField: "Authorization") == nil {
+            urlRequest.headers.add(.authorization(credential.accessToken))
+        }
+
+        // RefreshToken 헤더 중복 방지
+        if urlRequest.value(forHTTPHeaderField: "refreshToken") == nil {
+            urlRequest.addValue(credential.refreshToken, forHTTPHeaderField: "refreshToken")
+        }
     }
 
     func refresh(_ credential: Credential, for session: Alamofire.Session, completion: @escaping (Result<Credential, any Error>) -> Void) {

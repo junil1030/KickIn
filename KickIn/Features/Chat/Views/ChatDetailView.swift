@@ -13,6 +13,7 @@ struct ChatDetailView: View {
     @State private var messageText = ""
     @State private var selectedImages: [UIImage] = []
     @State private var selectedVideoURLs: [URL] = []
+    @State private var selectedPDFURLs: [URL] = []
     @FocusState private var isInputFocused: Bool
 
     // Lifecycle management
@@ -93,17 +94,20 @@ struct ChatDetailView: View {
                 messageText: $messageText,
                 selectedImages: $selectedImages,
                 selectedVideoURLs: $selectedVideoURLs,
+                selectedPDFURLs: $selectedPDFURLs,
                 isInputFocused: $isInputFocused,
                 onSend: {
                     Task {
                         await viewModel.sendMessage(
                             content: messageText.isEmpty ? nil : messageText,
                             images: selectedImages,
-                            videos: selectedVideoURLs
+                            videos: selectedVideoURLs,
+                            pdfs: selectedPDFURLs
                         )
                         messageText = ""
                         selectedImages = []
                         selectedVideoURLs = []
+                        selectedPDFURLs = []
                         isInputFocused = false
                     }
                 }
