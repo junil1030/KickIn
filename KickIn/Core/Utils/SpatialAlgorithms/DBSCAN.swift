@@ -11,12 +11,24 @@ import OSLog
 
 /// DBSCAN (Density-Based Spatial Clustering of Applications with Noise)
 ///
-/// 밀도 기반 클러스터링 알고리즘으로 QuadTree를 활용하여 O(n log n) 성능 달성
+/// 밀도 기반 클러스터링 알고리즘으로 QuadTree 또는 KDTree를 활용하여 O(n log n) 성능 달성
 /// - epsilon 반경 내 minPoints 이상의 점이 모이면 클러스터 형성
 /// - 클러스터에 속하지 않는 점은 노이즈로 분류
 /// - Swift Concurrency를 사용한 비동기 처리로 메인 스레드 블로킹 방지
 final class DBSCAN {
     // MARK: - Types
+
+    /// Spatial Index 종류
+    enum IndexKind {
+        case quadTree
+        case kdTree
+    }
+
+    /// Spatial Index 저장소
+    private enum SpatialIndex {
+        case quadTree(QuadTree)
+        case kdTree(KDTree)
+    }
 
     /// 점의 방문 상태
     private enum PointStatus {
@@ -27,9 +39,11 @@ final class DBSCAN {
 
     // MARK: - Properties
 
-    private let quadTree: QuadTree
+    private let spatialIndex: SpatialIndex
+    private let allPoints: [QuadPoint]  // 전체 점 저장
     private let epsilon: Double
     private let minPoints: Int
+    private let indexKind: IndexKind  // 로깅용
 
     // 방문 상태 추적 (Dictionary로 O(1) 조회)
     private var pointStatus: [String: PointStatus] = [:]
@@ -44,11 +58,31 @@ final class DBSCAN {
     ///   - points: 클러스터링할 점들
     ///   - epsilon: 이웃 검색 반경 (미터)
     ///   - minPoints: 클러스터 형성에 필요한 최소 점 개수
-    init(points: [QuadPoint], epsilon: Double, minPoints: Int) {
-        // QuadTree 구축
-        self.quadTree = QuadTree(points: points)
+    ///   - indexKind: 사용할 공간 인덱스 종류 (기본값: quadTree)
+    init(points: [QuadPoint], epsilon: Double, minPoints: Int, indexKind: IndexKind = .quadTree) {
+        self.allPoints = points
         self.epsilon = epsilon
         self.minPoints = minPoints
+        self.indexKind = indexKind
+
+        // Spatial Index 구축
+        let indexStartTime = CFAbsoluteTimeGetCurrent()
+
+        switch indexKind {
+        case .quadTree:
+            self.spatialIndex = .quadTree(QuadTree(points: points))
+        case .kdTree:
+            self.spatialIndex = .kdTree(KDTree(points: points))
+        }
+
+        let indexElapsed = CFAbsoluteTimeGetCurrent() - indexStartTime
+        let indexName = indexKind == .quadTree ? "QuadTree" : "KD-Tree"
+
+        Logger.default.info("""
+        🌳 \(indexName) Construction:
+           Points: \(points.count)
+           Time: \(String(format: "%.2f", indexElapsed * 1000))ms
+        """)
 
         // 모든 점을 unvisited로 초기화
         for point in points {
@@ -79,19 +113,15 @@ final class DBSCAN {
         self.clusters = []
         var noise: [QuadPoint] = []
 
-        // QuadTree에서 모든 점 가져오기
-        let boundary = self.quadTree.boundary
-        let allPoints = self.quadTree.query(range: boundary)
-
         // 모든 점에 대해 순회
-        for point in allPoints {
+        for point in self.allPoints {
             // 이미 처리된 점은 건너뛰기
             guard self.pointStatus[point.id] == .unvisited else { continue }
 
             // 방문 표시
             self.pointStatus[point.id] = .visited
 
-            // epsilon 반경 내 이웃 찾기 (QuadTree의 O(log n) 쿼리)
+            // epsilon 반경 내 이웃 찾기 (Spatial Index의 O(log n) 쿼리)
             let neighbors = self.findNeighbors(of: point)
 
             if neighbors.count < self.minPoints {
@@ -105,9 +135,11 @@ final class DBSCAN {
         }
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+        let indexName = indexKind == .quadTree ? "QuadTree" : "KD-Tree"
+
         Logger.default.info("""
-        🔍 DBSCAN Clustering Complete:
-           Points: \(allPoints.count)
+        🔍 DBSCAN Clustering Complete (\(indexName)):
+           Points: \(self.allPoints.count)
            Clusters: \(self.clusters.count)
            Noise: \(noise.count)
            Time: \(String(format: "%.2f", elapsed * 1000))ms
@@ -117,15 +149,19 @@ final class DBSCAN {
         return ClusterResult(clusters: self.clusters, noise: noise)
     }
 
-    /// 점의 이웃 찾기 (QuadTree 활용)
+    /// 점의 이웃 찾기 (Spatial Index 활용)
     /// - Parameter point: 검색할 점
     /// - Returns: epsilon 반경 내의 이웃 점들 (자신 제외)
     private func findNeighbors(of point: QuadPoint) -> [QuadPoint] {
-        // QuadTree의 queryRadius로 O(log n) 검색
-        let neighbors = quadTree.queryRadius(
-            center: point.coordinate,
-            radius: epsilon
-        )
+        // Spatial Index의 queryRadius로 O(log n) 검색
+        let neighbors: [QuadPoint]
+
+        switch spatialIndex {
+        case .quadTree(let tree):
+            neighbors = tree.queryRadius(center: point.coordinate, radius: epsilon)
+        case .kdTree(let tree):
+            neighbors = tree.queryRadius(center: point.coordinate, radius: epsilon)
+        }
 
         // 자신은 제외
         return neighbors.filter { $0.id != point.id }
@@ -188,12 +224,8 @@ extension DBSCAN {
         self.clusters = []
         var noise: [QuadPoint] = []
 
-        // QuadTree에서 모든 점 가져오기
-        let boundary = self.quadTree.boundary
-        let allPoints = self.quadTree.query(range: boundary)
-
         // 모든 점에 대해 순회
-        for point in allPoints {
+        for point in self.allPoints {
             guard self.pointStatus[point.id] == .unvisited else { continue }
             self.pointStatus[point.id] = .visited
 
@@ -208,9 +240,11 @@ extension DBSCAN {
         }
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+        let indexName = indexKind == .quadTree ? "QuadTree" : "KD-Tree"
+
         Logger.default.info("""
-        🔍 DBSCAN Clustering Complete (Sync):
-           Points: \(allPoints.count)
+        🔍 DBSCAN Clustering Complete (Sync, \(indexName)):
+           Points: \(self.allPoints.count)
            Clusters: \(self.clusters.count)
            Noise: \(noise.count)
            Time: \(String(format: "%.2f", elapsed * 1000))ms
