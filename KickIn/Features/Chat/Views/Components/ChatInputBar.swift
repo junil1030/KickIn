@@ -13,36 +13,59 @@ struct ChatInputBar: View {
     @Binding var messageText: String
     @Binding var selectedImages: [UIImage]
     @Binding var selectedVideoURLs: [URL]
+    @Binding var selectedPDFURLs: [URL]
     @FocusState.Binding var isInputFocused: Bool
 
     let onSend: () -> Void
 
     @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var showAttachmentMenu = false
 
     var body: some View {
         VStack(spacing: 0) {
             // 선택된 미디어 미리보기
-            if !selectedImages.isEmpty || !selectedVideoURLs.isEmpty {
+            if !selectedImages.isEmpty || !selectedVideoURLs.isEmpty || !selectedPDFURLs.isEmpty {
                 mediaPreviewSection
                 Divider()
             }
 
+            // 첨부 메뉴
+            if showAttachmentMenu {
+                AttachmentMenuView(
+                    isPresented: $showAttachmentMenu,
+                    selectedPDFURLs: $selectedPDFURLs,
+                    remainingSlots: max(0, 5 - totalMediaCount),
+                    onPhotosSelected: { items in
+                        selectedItems = items
+                        Task {
+                            await loadMediaItems()
+                        }
+                    },
+                    onVideosSelected: { items in
+                        selectedItems = items
+                        Task {
+                            await loadMediaItems()
+                        }
+                    },
+                    onDismiss: {
+                        isInputFocused = false
+                    }
+                )
+                .transition(.move(edge: .bottom))
+            }
+
             // 입력창
             HStack(spacing: 12) {
-                // 미디어 첨부 버튼
-                PhotosPicker(
-                    selection: $selectedItems,
-                    maxSelectionCount: 5,
-                    matching: .any(of: [.images, .videos])
-                ) {
-                    Image(systemName: "photo")
+                // + 버튼 (첨부 메뉴)
+                Button {
+                    isInputFocused = false
+                    withAnimation {
+                        showAttachmentMenu.toggle()
+                    }
+                } label: {
+                    Image(systemName: showAttachmentMenu ? "xmark.circle.fill" : "plus.circle.fill")
                         .font(.system(size: 24))
                         .foregroundColor(.gray75)
-                }
-                .onChange(of: selectedItems) { _, _ in
-                    Task {
-                        await loadMediaItems()
-                    }
                 }
 
                 // 텍스트 입력
@@ -79,10 +102,20 @@ struct ChatInputBar: View {
                 selectedItems.removeAll()
             }
         }
+        .onChange(of: selectedPDFURLs) { _, newValue in
+            // PDF가 비워지면 첨부 메뉴 닫기
+            if newValue.isEmpty && selectedImages.isEmpty && selectedVideoURLs.isEmpty {
+                showAttachmentMenu = false
+            }
+        }
     }
 
     private var canSend: Bool {
-        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !selectedImages.isEmpty || !selectedVideoURLs.isEmpty
+        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !selectedImages.isEmpty || !selectedVideoURLs.isEmpty || !selectedPDFURLs.isEmpty
+    }
+
+    private var totalMediaCount: Int {
+        selectedImages.count + selectedVideoURLs.count + selectedPDFURLs.count
     }
 
     private var mediaPreviewSection: some View {
@@ -127,6 +160,36 @@ struct ChatInputBar: View {
                         // 삭제 버튼
                         Button {
                             removeVideo(at: index)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray90)
+                                .background(Color.white)
+                                .clipShape(Circle())
+                        }
+                        .offset(x: 5, y: -5)
+                    }
+                }
+
+                // PDF 미리보기
+                ForEach(Array(selectedPDFURLs.enumerated()), id: \.offset) { index, pdfURL in
+                    ZStack(alignment: .topTrailing) {
+                        // PDF 아이콘
+                        VStack(spacing: 4) {
+                            Image(systemName: "doc.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.red)
+                            Text(pdfURL.lastPathComponent)
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .frame(maxWidth: 50)
+                        }
+                        .frame(width: 60, height: 60)
+                        .background(Color.gray30)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                        // 삭제 버튼
+                        Button {
+                            removePDF(at: index)
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.gray90)
@@ -195,6 +258,18 @@ struct ChatInputBar: View {
                 itemIndex += 1
             }
         }
+    }
+
+    private func removePDF(at index: Int) {
+        guard index < selectedPDFURLs.count else { return }
+        let pdfURL = selectedPDFURLs[index]
+
+        // 임시 디렉토리의 파일인 경우 삭제
+        if pdfURL.path.contains(FileManager.default.temporaryDirectory.path) {
+            try? FileManager.default.removeItem(at: pdfURL)
+        }
+
+        selectedPDFURLs.remove(at: index)
     }
 }
 

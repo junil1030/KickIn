@@ -193,7 +193,7 @@ final class ChatDetailViewModel: ObservableObject {
         isLoadingMore = false
     }
 
-    func sendMessage(content: String?, images: [UIImage], videos: [URL]) async {
+    func sendMessage(content: String?, images: [UIImage], videos: [URL], pdfs: [URL]) async {
         var filePaths: [String] = []
         var localThumbnailURLs: [URL] = []  // Optimistic UI용 로컬 URL 저장
 
@@ -227,7 +227,19 @@ final class ChatDetailViewModel: ObservableObject {
             }
         }
 
-        // 3. 메시지 전송 (Optimistic UI와 함께)
+        // 3. PDF 업로드
+        for pdfURL in pdfs {
+            do {
+                let serverURL = try await uploadPDF(pdfURL)
+                filePaths.append(serverURL)
+            } catch {
+                Logger.chat.error("❌ Failed to upload PDF: \(error)")
+                errorMessage = "PDF 업로드에 실패했습니다."
+                return
+            }
+        }
+
+        // 4. 메시지 전송 (Optimistic UI와 함께)
         await sendMessageWithFiles(
             content: content,
             filePaths: filePaths,
@@ -470,6 +482,44 @@ final class ChatDetailViewModel: ObservableObject {
         )
 
         return response.files ?? []
+    }
+
+    private func uploadPDF(_ pdfURL: URL) async throws -> String {
+        // 임시 파일 정리를 보장 (성공/실패 무관)
+        defer {
+            // 임시 디렉토리의 PDF 파일 삭제
+            if pdfURL.path.contains(FileManager.default.temporaryDirectory.path) {
+                try? FileManager.default.removeItem(at: pdfURL)
+                Logger.chat.info("🗑️ Deleted temporary PDF: \(pdfURL.lastPathComponent)")
+            }
+        }
+
+        // 1. 파일 크기 체크 (5MB)
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: pdfURL.path)
+        let fileSize = fileAttributes[.size] as? Int64 ?? 0
+
+        guard fileSize <= 5_242_880 else {
+            throw NetworkError.badRequest(message: "PDF 크기는 5MB를 초과할 수 없습니다.")
+        }
+
+        // 2. Data 변환
+        let pdfData = try Data(contentsOf: pdfURL)
+        let fileName = pdfURL.lastPathComponent.isEmpty
+            ? "document_\(UUID().uuidString).pdf"
+            : pdfURL.lastPathComponent
+
+        // 3. 업로드
+        let response: ChatFilesResponseDTO = try await networkService.upload(
+            ChatRouter.uploadFiles(roomId: roomId),
+            files: [(data: pdfData, name: "files", fileName: fileName, mimeType: "application/pdf")]
+        )
+
+        guard let serverURL = response.files?.first else {
+            throw NetworkError.serverError(message: "No PDF path from server")
+        }
+
+        Logger.chat.info("✅ PDF uploaded successfully: \(fileName)")
+        return serverURL
     }
 
     private func uploadVideo(_ videoURL: URL, retryCount: Int = 0) async throws -> VideoUploadResult {
