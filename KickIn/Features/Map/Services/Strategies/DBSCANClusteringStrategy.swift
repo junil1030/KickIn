@@ -53,23 +53,51 @@ final class DBSCANClusteringStrategy: ClusteringStrategy {
            MinPoints: \(context.minPoints)
         """)
 
-        // DBSCAN 인스턴스 생성 및 클러스터링
-        let dbscan = DBSCAN(
+        // QuadTree 기반 DBSCAN (성능 비교용 - 주석 해제 시 QuadTree vs KDTree 비교 가능)
+        /*
+        let quadTreeDBSCAN = DBSCAN(
             points: points,
             epsilon: context.epsilon,
-            minPoints: context.minPoints
+            minPoints: context.minPoints,
+            indexKind: .quadTree
         )
-        let basicResult = await dbscan.cluster()
+        let quadTreeStartTime = CFAbsoluteTimeGetCurrent()
+        let quadTreeResult = await quadTreeDBSCAN.cluster()
+        let quadTreeElapsed = CFAbsoluteTimeGetCurrent() - quadTreeStartTime
+        */
 
-        let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+        // KD-Tree 기반 DBSCAN
+        let kdTreeDBSCAN = DBSCAN(
+            points: points,
+            epsilon: context.epsilon,
+            minPoints: context.minPoints,
+            indexKind: .kdTree
+        )
+        let kdTreeStartTime = CFAbsoluteTimeGetCurrent()
+        let kdTreeResult = await kdTreeDBSCAN.cluster()
+        let kdTreeElapsed = CFAbsoluteTimeGetCurrent() - kdTreeStartTime
 
-        // Enhanced ClusterResult 반환
+        // 비교 로깅 (QuadTree 측정 시 주석 해제)
+        /*
+        let totalElapsed = CFAbsoluteTimeGetCurrent() - startTime
+        let speedup = quadTreeElapsed / kdTreeElapsed
+
+        Logger.default.info("""
+           DBSCAN Performance Comparison:
+           QuadTree: \(String(format: "%.2f", quadTreeElapsed * 1000))ms (\(quadTreeResult.clusterCount) clusters, \(quadTreeResult.noise.count) noise)
+           KD-Tree:  \(String(format: "%.2f", kdTreeElapsed * 1000))ms (\(kdTreeResult.clusterCount) clusters, \(kdTreeResult.noise.count) noise)
+           Speedup:  \(String(format: "%.2f", speedup))x \(speedup >= 1.0 ? "(KD-Tree faster)" : "(QuadTree faster)")
+           Total:    \(String(format: "%.2f", totalElapsed * 1000))ms
+        """)
+        */
+
+        // KD-Tree 결과 반환
         return ClusterResult(
-            clusters: basicResult.clusters,
-            noise: basicResult.noise,
+            clusters: kdTreeResult.clusters,
+            noise: kdTreeResult.noise,
             mode: .densityBased,
-            executionTime: elapsed,
-            reason: "Density-based analysis for filtered data"
+            executionTime: kdTreeElapsed,
+            reason: "Density-based analysis with KD-Tree"
         )
     }
 }
