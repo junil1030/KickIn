@@ -91,6 +91,31 @@ final class MockNetworkService: NetworkServiceProtocol {
         throw NetworkError.decodingError
     }
 
+    func downloadPDF(
+        from url: URL,
+        to destinationURL: URL,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws -> URL {
+        // Mock progress updates
+        Task { @MainActor in
+            progressHandler(0.0)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1초
+        Task { @MainActor in
+            progressHandler(0.5)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1초
+        Task { @MainActor in
+            progressHandler(1.0)
+        }
+
+        if !shouldSucceed, let error = mockError {
+            throw error
+        }
+
+        return destinationURL
+    }
+
     func reset() {
         shouldSucceed = true
         mockResponse = nil
