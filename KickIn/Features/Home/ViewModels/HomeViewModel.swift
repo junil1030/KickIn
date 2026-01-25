@@ -12,6 +12,7 @@ import OSLog
 final class HomeViewModel: ObservableObject {
     @Published var todayEstates: [TodayEstateUIModel] = []
     @Published var hotEstates: [HotEstateUIModel] = []
+    @Published var recentEstates: [RecentEstateUIModel] = []
     @Published var todayTopics: [TopicUIModel] = []
     @Published var banners: [BannerUIModel] = []
     @Published var promoVideos: [VideoUIModel] = []
@@ -19,13 +20,21 @@ final class HomeViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
+    private let recentEstateRepository: RecentEstateRepositoryProtocol
     private var nextVideoCursor: String?
+
+    // MARK: - Initialization
+
+    init(recentEstateRepository: RecentEstateRepositoryProtocol = RecentEstateRepository()) {
+        self.recentEstateRepository = recentEstateRepository
+    }
 
     // MARK: - Public Methods
 
     func loadData() async {
         await loadTodayEstates()
         await loadHotEstates()
+        await loadRecentEstates()
         await loadTopic()
         await loadBanners()
         await loadPromoVideos()
@@ -102,7 +111,23 @@ extension HomeViewModel {
             }
         }
     }
-  
+
+    /// Load recent estates
+    private func loadRecentEstates() async {
+        do {
+            let estates = try await recentEstateRepository.fetchRecentEstatesAsUIModels(limit: 10)
+            await MainActor.run {
+                self.recentEstates = estates
+            }
+            Logger.database.info("✅ Loaded \(estates.count) recent estates")
+        } catch {
+            Logger.database.error("❌ Failed to load recent estates: \(error.localizedDescription)")
+            await MainActor.run {
+                self.recentEstates = []
+            }
+        }
+    }
+
     /// Load banners
     private func loadBanners() async {
         await MainActor.run {
