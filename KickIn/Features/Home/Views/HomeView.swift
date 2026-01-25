@@ -23,7 +23,7 @@ struct HomeView: View {
                 CategoryButtonRow()
 
                 // 최근 검색 매물 섹션
-                RecentEstateSection()
+                RecentEstateSection(estates: viewModel.recentEstates)
                 
                 // 매물 홍보 영상 섹션
                 VideoPromoSection(
