@@ -17,12 +17,15 @@ final class EstateDetailViewModel: ObservableObject {
     @Published var paymentOrder: PaymentOrderInfo?
 
     private let networkService = NetworkServiceFactory.shared.makeNetworkService()
+    private let recentEstateRepository: RecentEstateRepositoryProtocol
     private let estateId: String
 
     // MARK: - Initialization
 
-    init(estateId: String) {
+    init(estateId: String,
+         recentEstateRepository: RecentEstateRepositoryProtocol = RecentEstateRepository()) {
         self.estateId = estateId
+        self.recentEstateRepository = recentEstateRepository
     }
 
     // MARK: - Public Methods
@@ -134,6 +137,9 @@ extension EstateDetailViewModel {
 
             Logger.network.info("✅ Loaded estate detail for ID: \(self.estateId)")
 
+            // Save to recent estates
+            await saveToRecentEstates(estateUIModel)
+
         } catch let error as NetworkError {
             Logger.network.error("❌ Failed to load estate detail: \(error.localizedDescription)")
             await MainActor.run {
@@ -167,6 +173,24 @@ extension EstateDetailViewModel {
             Logger.network.error("❌ Failed to load similar estates: \(error.localizedDescription)")
         } catch {
             Logger.network.error("❌ Unknown error loading similar estates: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveToRecentEstates(_ estate: EstateDetailUIModel) async {
+        do {
+            try await recentEstateRepository.saveEstate(
+                estateId: estate.estateId ?? UUID().uuidString,
+                category: estate.category,
+                deposit: estate.deposit,
+                monthlyRent: estate.monthlyRent,
+                latitude: estate.geolocation?.latitude,
+                longitude: estate.geolocation?.longitude,
+                area: estate.area,
+                thumbnailURL: estate.thumbnails?.first
+            )
+            Logger.database.info("💾 Saved estate to recent: \(estate.estateId ?? "unknown")")
+        } catch {
+            Logger.database.error("❌ Failed to save recent estate: \(error.localizedDescription)")
         }
     }
 }
