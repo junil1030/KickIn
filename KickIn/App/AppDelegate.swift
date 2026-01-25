@@ -120,12 +120,15 @@ extension AppDelegate: MessagingDelegate {
 // MARK: - Realm Configuration
 extension AppDelegate {
     private func configureRealm() {
-        let schemaVersion: UInt64 = 1
+        let schemaVersion: UInt64 = 2
 
         let config = Realm.Configuration(
             schemaVersion: schemaVersion,
             migrationBlock: { migration, oldSchemaVersion in
                 if oldSchemaVersion < 1 {}
+                if oldSchemaVersion < 2 {
+                    // RecentEstateObject 추가 (자동 마이그레이션)
+                }
             }
         )
 
