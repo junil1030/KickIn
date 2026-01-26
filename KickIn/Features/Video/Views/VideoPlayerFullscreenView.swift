@@ -31,6 +31,7 @@ struct VideoPlayerFullscreenView: View {
                             }
                         )
                         .ignoresSafeArea()
+                        .screenshotPreventingMask(true)
 
                         VideoPlayerGestureView(
                             geometry: geometry,
