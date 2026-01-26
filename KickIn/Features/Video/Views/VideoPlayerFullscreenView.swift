@@ -114,34 +114,15 @@ struct VideoPlayerFullscreenView: View {
         .statusBar(hidden: true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
-            setOrientation(.landscapeRight)
+            OrientationManager.shared.setOrientation(.landscapeRight)
         }
         .onDisappear {
-            setOrientation(.portrait)
-        }
-    }
-
-    private func setOrientation(_ orientation: UIInterfaceOrientation) {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-
-        let geometryPreferences: UIWindowScene.GeometryPreferences
-        switch orientation {
-        case .landscapeRight:
-            geometryPreferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .landscapeRight)
-        case .landscapeLeft:
-            geometryPreferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .landscapeLeft)
-        case .portrait:
-            geometryPreferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .portrait)
-        default:
-            geometryPreferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .portrait)
-        }
-
-        windowScene.requestGeometryUpdate(geometryPreferences) { error in
-            Logger.network.error("❌ Failed to update geometry: \(error.localizedDescription)")
+            OrientationManager.shared.setOrientation(.portrait)
         }
     }
 
     private func exitFullscreen() {
+        OrientationManager.shared.setOrientation(.portrait)
         isFullscreen = false
         viewModel.playerState.isFullscreen = false
     }

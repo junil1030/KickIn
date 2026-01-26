@@ -67,6 +67,9 @@ struct VideoDetailView: View {
                 currentTime: $currentTime
             )
         }
+        .onAppear {
+            OrientationManager.shared.setOrientation(.portrait)
+        }
         .task {
             await viewModel.loadStream()
         }
