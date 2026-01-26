@@ -206,12 +206,10 @@ struct ChatInputBar: View {
     }
 
     private func loadMediaItems() async {
-        selectedImages.removeAll()
-        selectedVideoURLs.removeAll()
-
+        // 기존 미디어는 유지하고 새로 선택된 항목만 추가
         for item in selectedItems {
             // 이미지 처리
-            if item.supportedContentTypes.contains(.image) {
+            if item.supportedContentTypes.contains(where: { $0.conforms(to: .image) }) {
                 if let data = try? await item.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     selectedImages.append(image)
@@ -233,7 +231,7 @@ struct ChatInputBar: View {
         // selectedItems에서도 해당 이미지 항목 찾아서 삭제
         var itemIndex = 0
         for (i, item) in selectedItems.enumerated() {
-            if item.supportedContentTypes.contains(.image) {
+            if item.supportedContentTypes.contains(where: { $0.conforms(to: .image) }) {
                 if itemIndex == index {
                     selectedItems.remove(at: i)
                     return
