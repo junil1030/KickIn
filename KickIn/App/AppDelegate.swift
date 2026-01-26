@@ -53,6 +53,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func applicationDidBecomeActive(_ application: UIApplication) {
         paymentViewModel.retryPendingValidations()
     }
+
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        return OrientationManager.shared.lockedOrientation
+    }
 }
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
