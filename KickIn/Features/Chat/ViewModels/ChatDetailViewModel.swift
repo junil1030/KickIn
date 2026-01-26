@@ -300,10 +300,20 @@ final class ChatDetailViewModel: ObservableObject {
             return
         }
 
-        // 내 메시지는 제외 (이미 Optimistic UI로 추가됨)
+        // 내 메시지인 경우: 임시 메시지 찾아서 삭제 후 실제 메시지 저장
         if messageDTO.sender?.userId == myUserId {
-            Logger.chat.info("⚠️ [ChatDetailViewModel] My own message, skipping: \(chatId)")
-            return
+            // Optimistic UI의 임시 메시지 찾기 (isTemporary=true인 내 메시지)
+            let tempMessage = displayedChatItems.first { item in
+                guard case .message(let config) = item else { return false }
+                return config.message.isSentByMe && config.message.isTemporary
+            }
+
+            if let tempMessage = tempMessage,
+               case .message(let config) = tempMessage {
+                // 임시 메시지 삭제
+                try? await repository.deleteMessage(chatId: config.message.id)
+                Logger.chat.info("🗑️ [ChatDetailViewModel] Deleted temporary message: \(config.message.id)")
+            }
         }
 
         // Realm에 저장 → @ObservedResults가 자동으로 UI 업데이트
