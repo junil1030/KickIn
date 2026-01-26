@@ -101,6 +101,7 @@ struct VideoDetailView: View {
                         )
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .screenshotPreventingMask(true)
 
                         VideoPlayerGestureView(
                             geometry: geometry,
