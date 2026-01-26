@@ -218,11 +218,43 @@ struct ChatMessageBubble: View {
             }
 
             if message.sendFailed {
-                Text("전송 실패")
-                    .font(.caption2(.pretendardMedium))
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                HStack(spacing: 8) {
+                    Text("전송 실패")
+                        .font(.caption2(.pretendardMedium))
+                        .foregroundColor(.red)
+
+                    HStack(spacing: 4) {
+                        // 재전송 버튼
+                        Button {
+                            Task {
+                                await viewModel.retryFailedMessage(chatId: message.id)
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(width: 24, height: 24)
+                                .background(Color.deepCream)
+                                .clipShape(Circle())
+                        }
+
+                        // 삭제 버튼
+                        Button {
+                            Task {
+                                await viewModel.deleteFailedMessage(chatId: message.id)
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(width: 24, height: 24)
+                                .background(Color.gray60)
+                                .clipShape(Circle())
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
             }
         }
     }
