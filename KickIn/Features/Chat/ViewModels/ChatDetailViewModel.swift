@@ -251,6 +251,101 @@ final class ChatDetailViewModel: ObservableObject {
         socketService.disconnect()
     }
 
+    /// 전송 실패한 메시지 재전송
+    func retryFailedMessage(chatId: String) async {
+        do {
+            // Realm에서 실패한 메시지 조회
+            let messages = try await repository.fetchMessages(roomId: roomId, limit: 1000, beforeDate: nil)
+            guard let failedMessage = messages.first(where: { $0.chatId == chatId }) else {
+                Logger.chat.error("❌ Failed message not found: \(chatId)")
+                return
+            }
+
+            // 임시 상태로 변경 (UI에 전송 중 표시)
+            try await repository.updateMessageStatus(
+                chatId: chatId,
+                isTemporary: true,
+                failReason: nil
+            )
+
+            // 메시지 재전송
+            let content = failedMessage.content
+            let filePaths = Array(failedMessage.files)
+
+            Logger.chat.info("🔄 Retrying message: \(chatId)")
+
+            // 기존 메시지 삭제
+            try await repository.deleteMessage(chatId: chatId)
+
+            // 새로운 임시 ID로 재전송
+            let tempChatId = UUID().uuidString
+            let createdAt = ISO8601DateFormatter().string(from: Date())
+
+            // Realm에 임시 메시지 저장
+            try await repository.createAndSaveMessage(
+                chatId: tempChatId,
+                roomId: roomId,
+                content: content,
+                createdAt: createdAt,
+                updatedAt: nil,
+                senderUserId: myUserId,
+                senderNickname: myNickname.isEmpty ? "나" : myNickname,
+                senderProfileImage: myProfileImage,
+                senderIntroduction: nil,
+                files: filePaths,
+                isSentByMe: true,
+                isTemporary: true
+            )
+
+            // HTTP API로 메시지 전송
+            let requestDTO = SendMessageRequestDTO(content: content, files: filePaths)
+            let response: ChatMessageResponseDTO = try await networkService.request(
+                ChatRouter.sendMessage(roomId: roomId, requestDTO)
+            )
+
+            // 서버 응답의 실제 chatId로 교체
+            if let serverChatId = response.chatId {
+                try await repository.deleteMessage(chatId: tempChatId)
+
+                try await repository.createAndSaveMessage(
+                    chatId: serverChatId,
+                    roomId: roomId,
+                    content: content,
+                    createdAt: response.createdAt ?? createdAt,
+                    updatedAt: response.updatedAt,
+                    senderUserId: myUserId,
+                    senderNickname: myNickname.isEmpty ? "나" : myNickname,
+                    senderProfileImage: myProfileImage,
+                    senderIntroduction: nil,
+                    files: filePaths,
+                    isSentByMe: true,
+                    isTemporary: false
+                )
+
+                Logger.chat.info("✅ Message retry successful: \(serverChatId)")
+            }
+
+        } catch {
+            Logger.chat.error("❌ Failed to retry message: \(error)")
+            // 실패 상태로 되돌림
+            try? await repository.updateMessageStatus(
+                chatId: chatId,
+                isTemporary: false,
+                failReason: error.localizedDescription
+            )
+        }
+    }
+
+    /// 전송 실패한 메시지 삭제
+    func deleteFailedMessage(chatId: String) async {
+        do {
+            try await repository.deleteMessage(chatId: chatId)
+            Logger.chat.info("🗑️ Deleted failed message: \(chatId)")
+        } catch {
+            Logger.chat.error("❌ Failed to delete message: \(error)")
+        }
+    }
+
     /// Called from ChatLifecycleManager for reconnection after network recovery or foreground return
     func performReconnectionWithGapFill() async {
         Logger.chat.info("🔄 [ChatDetailViewModel] Starting reconnection with gap fill for room: \(self.roomId)")
