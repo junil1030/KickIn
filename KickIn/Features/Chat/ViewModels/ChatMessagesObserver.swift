@@ -39,7 +39,7 @@ final class ChatMessagesObserver: ObservableObject {
 
     /// roomId로 필터링된 메시지 결과
     var filteredMessages: Results<ChatMessageObject> {
-        allMessages.where { $0.roomId == self.roomId }
+        allMessages.where { $0.room.roomId == self.roomId }
     }
 
     /// 메시지 개수 (디버깅 및 빈 상태 체크용)

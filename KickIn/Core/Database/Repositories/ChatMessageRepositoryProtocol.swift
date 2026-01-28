@@ -8,23 +8,28 @@
 import Foundation
 
 protocol ChatMessageRepositoryProtocol {
-    // CRUD Operations
-    func saveMessages(_ messages: [ChatMessageObject]) async throws
+    // MARK: - User Operations
+    func getOrCreateUser(userId: String, nickname: String, profileImage: String?, introduction: String?) async throws -> UserObject
+    func updateUser(userId: String, nickname: String?, profileImage: String?, introduction: String?) async throws
+    func getUser(userId: String) async throws -> UserObject?
+
+    // MARK: - Room Operations
+    func getOrCreateRoom(roomId: String, createdAt: String, participants: [UserObject]) async throws -> ChatRoomObject
+    func getRoom(roomId: String) async throws -> ChatRoomObject?
+    func updateRoomLastMessage(roomId: String, message: ChatMessageObject) async throws
+
+    // MARK: - Message CRUD
     func saveMessage(_ message: ChatMessageObject) async throws
-    func saveMessageFromDTO(_ messageDTO: ChatMessageItemDTO, myUserId: String) async throws
-    func createAndSaveMessage(
+    func saveMessageFromDTO(_ messageDTO: ChatMessageItemDTO, roomId: String, myUserId: String) async throws
+    func createAndSaveTemporaryMessage(
         chatId: String,
         roomId: String,
         content: String?,
         createdAt: String,
-        updatedAt: String?,
-        senderUserId: String?,
-        senderNickname: String?,
+        senderUserId: String,
+        senderNickname: String,
         senderProfileImage: String?,
-        senderIntroduction: String?,
-        files: [String],
-        isSentByMe: Bool,
-        isTemporary: Bool
+        files: [String]
     ) async throws
     func fetchMessages(roomId: String, limit: Int, beforeDate: String?) async throws -> [ChatMessageObject]
     func fetchMessagesAsUIModels(roomId: String, limit: Int, beforeDate: String?) async throws -> [ChatMessageUIModel]
@@ -32,10 +37,10 @@ protocol ChatMessageRepositoryProtocol {
     func deleteMessage(chatId: String) async throws
     func updateMessageStatus(chatId: String, isTemporary: Bool, failReason: String?) async throws
 
-    // Batch Operations
-    func saveMessagesFromDTOs(_ messages: [ChatMessageItemDTO], myUserId: String) async throws
+    // MARK: - Batch Operations
+    func saveMessagesFromDTOs(_ messages: [ChatMessageItemDTO], roomId: String, myUserId: String) async throws
 
-    // Metadata Operations
-    func getMetadata(roomId: String) async throws -> ChatRoomMetadataObject?
+    // MARK: - Metadata Operations (Room 기반)
+    func getMetadata(roomId: String) async throws -> (lastCursor: String?, hasMoreData: Bool)?
     func updateMetadata(roomId: String, lastCursor: String?, hasMoreData: Bool) async throws
 }

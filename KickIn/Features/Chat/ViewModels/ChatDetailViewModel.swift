@@ -179,7 +179,7 @@ final class ChatDetailViewModel: ObservableObject {
 
             // Realm에 저장 → @ObservedResults가 자동으로 UI 업데이트
             for messageDTO in newMessages {
-                try await repository.saveMessageFromDTO(messageDTO, myUserId: myUserId)
+                try await repository.saveMessageFromDTO(messageDTO, roomId: roomId, myUserId: myUserId)
             }
 
             hasMoreData = newMessages.count >= 50
@@ -282,19 +282,15 @@ final class ChatDetailViewModel: ObservableObject {
             let createdAt = ISO8601DateFormatter().string(from: Date())
 
             // Realm에 임시 메시지 저장
-            try await repository.createAndSaveMessage(
+            try await repository.createAndSaveTemporaryMessage(
                 chatId: tempChatId,
                 roomId: roomId,
                 content: content,
                 createdAt: createdAt,
-                updatedAt: nil,
                 senderUserId: myUserId,
                 senderNickname: myNickname.isEmpty ? "나" : myNickname,
                 senderProfileImage: myProfileImage,
-                senderIntroduction: nil,
-                files: filePaths,
-                isSentByMe: true,
-                isTemporary: true
+                files: filePaths
             )
 
             // HTTP API로 메시지 전송
@@ -307,19 +303,11 @@ final class ChatDetailViewModel: ObservableObject {
             if let serverChatId = response.chatId {
                 try await repository.deleteMessage(chatId: tempChatId)
 
-                try await repository.createAndSaveMessage(
-                    chatId: serverChatId,
+                // 서버 응답을 DTO로 변환하여 저장
+                try await repository.saveMessageFromDTO(
+                    response.toMessageItemDTO(),
                     roomId: roomId,
-                    content: content,
-                    createdAt: response.createdAt ?? createdAt,
-                    updatedAt: response.updatedAt,
-                    senderUserId: myUserId,
-                    senderNickname: myNickname.isEmpty ? "나" : myNickname,
-                    senderProfileImage: myProfileImage,
-                    senderIntroduction: nil,
-                    files: filePaths,
-                    isSentByMe: true,
-                    isTemporary: false
+                    myUserId: myUserId
                 )
 
                 Logger.chat.info("✅ Message retry successful: \(serverChatId)")
@@ -412,7 +400,7 @@ final class ChatDetailViewModel: ObservableObject {
         }
 
         // Realm에 저장 → @ObservedResults가 자동으로 UI 업데이트
-        try? await repository.saveMessageFromDTO(messageDTO, myUserId: myUserId)
+        try? await repository.saveMessageFromDTO(messageDTO, roomId: roomId, myUserId: myUserId)
 
         Logger.chat.info("✅ [ChatDetailViewModel] Saved message to Realm: \(chatId)")
     }
@@ -694,19 +682,15 @@ final class ChatDetailViewModel: ObservableObject {
             : localThumbnailURLs.map { $0.absoluteString } + filePaths.filter { !$0.contains("-thumb.") }
 
         // Realm에 임시 메시지 저장 → @ObservedResults가 자동으로 UI 표시
-        try? await repository.createAndSaveMessage(
+        try? await repository.createAndSaveTemporaryMessage(
             chatId: tempChatId,
             roomId: roomId,
             content: content,
             createdAt: createdAt,
-            updatedAt: nil,
             senderUserId: myUserId,
             senderNickname: myNickname.isEmpty ? "나" : myNickname,
             senderProfileImage: myProfileImage,
-            senderIntroduction: nil,
-            files: optimisticFiles,
-            isSentByMe: true,
-            isTemporary: true
+            files: optimisticFiles
         )
 
         do {
@@ -717,25 +701,17 @@ final class ChatDetailViewModel: ObservableObject {
             )
 
             // 서버 응답의 실제 chatId로 교체 → @ObservedResults가 자동으로 UI 업데이트
-            if let serverChatId = response.chatId {
+            if response.chatId != nil {
                 try await repository.deleteMessage(chatId: tempChatId)
 
-                try await repository.createAndSaveMessage(
-                    chatId: serverChatId,
+                // 서버 응답을 DTO로 변환하여 저장
+                try await repository.saveMessageFromDTO(
+                    response.toMessageItemDTO(),
                     roomId: roomId,
-                    content: content,
-                    createdAt: response.createdAt ?? createdAt,
-                    updatedAt: response.updatedAt,
-                    senderUserId: myUserId,
-                    senderNickname: myNickname.isEmpty ? "나" : myNickname,
-                    senderProfileImage: myProfileImage,
-                    senderIntroduction: nil,
-                    files: filePaths,
-                    isSentByMe: true,
-                    isTemporary: false
+                    myUserId: myUserId
                 )
 
-                Logger.chat.info("✅ Message sent successfully: \(serverChatId)")
+                Logger.chat.info("✅ Message sent successfully: \(response.chatId ?? "")")
             }
 
         } catch {
