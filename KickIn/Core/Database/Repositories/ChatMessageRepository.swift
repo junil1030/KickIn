@@ -40,14 +40,101 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
         self.actor = RealmActor(configuration: configuration)
     }
 
-    // MARK: - CRUD Operations
+    // MARK: - User Operations
 
-    func saveMessages(_ messages: [ChatMessageObject]) async throws {
+    func getOrCreateUser(userId: String, nickname: String, profileImage: String?, introduction: String?) async throws -> UserObject {
         try await actor.write { realm in
-            realm.add(messages, update: .modified)  // upsert
+            if let existing = realm.object(ofType: UserObject.self, forPrimaryKey: userId) {
+                // 기존 유저 정보 업데이트
+                existing.nickname = nickname
+                existing.profileImage = profileImage
+                existing.introduction = introduction
+                existing.updatedAt = ISO8601DateFormatter().string(from: Date())
+                return existing
+            } else {
+                // 새 유저 생성
+                let user = UserObject(
+                    userId: userId,
+                    nickname: nickname,
+                    profileImage: profileImage,
+                    introduction: introduction,
+                    updatedAt: ISO8601DateFormatter().string(from: Date())
+                )
+                realm.add(user)
+                Logger.database.info("👤 Created new user: \(userId)")
+                return user
+            }
         }
-        Logger.database.info("💾 Saved \(messages.count) messages")
     }
+
+    func updateUser(userId: String, nickname: String?, profileImage: String?, introduction: String?) async throws {
+        try await actor.write { realm in
+            if let user = realm.object(ofType: UserObject.self, forPrimaryKey: userId) {
+                if let nickname = nickname {
+                    user.nickname = nickname
+                }
+                if let profileImage = profileImage {
+                    user.profileImage = profileImage
+                }
+                if let introduction = introduction {
+                    user.introduction = introduction
+                }
+                user.updatedAt = ISO8601DateFormatter().string(from: Date())
+                Logger.database.info("👤 Updated user: \(userId)")
+            }
+        }
+    }
+
+    func getUser(userId: String) async throws -> UserObject? {
+        try await actor.read { realm in
+            realm.object(ofType: UserObject.self, forPrimaryKey: userId)?.freeze()
+        }
+    }
+
+    // MARK: - Room Operations
+
+    func getOrCreateRoom(roomId: String, createdAt: String, participants: [UserObject]) async throws -> ChatRoomObject {
+        try await actor.write { realm in
+            if let existing = realm.object(ofType: ChatRoomObject.self, forPrimaryKey: roomId) {
+                return existing
+            } else {
+                let room = ChatRoomObject(
+                    roomId: roomId,
+                    createdAt: createdAt
+                )
+                // participants 추가 (managed objects 필요)
+                for participant in participants {
+                    if let managedUser = realm.object(ofType: UserObject.self, forPrimaryKey: participant.userId) {
+                        room.participants.append(managedUser)
+                    } else {
+                        realm.add(participant)
+                        room.participants.append(participant)
+                    }
+                }
+                realm.add(room)
+                Logger.database.info("🏠 Created new room: \(roomId)")
+                return room
+            }
+        }
+    }
+
+    func getRoom(roomId: String) async throws -> ChatRoomObject? {
+        try await actor.read { realm in
+            realm.object(ofType: ChatRoomObject.self, forPrimaryKey: roomId)?.freeze()
+        }
+    }
+
+    func updateRoomLastMessage(roomId: String, message: ChatMessageObject) async throws {
+        try await actor.write { realm in
+            if let room = realm.object(ofType: ChatRoomObject.self, forPrimaryKey: roomId),
+               let managedMessage = realm.object(ofType: ChatMessageObject.self, forPrimaryKey: message.chatId) {
+                room.lastMessage = managedMessage
+                room.updatedAt = message.createdAt
+            }
+        }
+    }
+
+    // MARK: - Message CRUD
 
     func saveMessage(_ message: ChatMessageObject) async throws {
         try await actor.write { realm in
@@ -56,67 +143,110 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
         Logger.database.info("💾 Saved message: \(message.chatId)")
     }
 
-    func saveMessageFromDTO(_ messageDTO: ChatMessageItemDTO, myUserId: String) async throws {
+    func saveMessageFromDTO(_ messageDTO: ChatMessageItemDTO, roomId: String, myUserId: String) async throws {
         try await actor.write { realm in
-            let message = ChatMessageObject()
-            message.chatId = messageDTO.chatId ?? UUID().uuidString
-            message.roomId = messageDTO.roomId ?? ""
-            message.content = messageDTO.content
-            message.createdAt = messageDTO.createdAt ?? ISO8601DateFormatter().string(from: Date())
-            message.updatedAt = messageDTO.updatedAt
-            message.senderUserId = messageDTO.sender?.userId
-            message.senderNickname = messageDTO.sender?.nick
-            message.senderProfileImage = messageDTO.sender?.profileImage
-            message.senderIntroduction = messageDTO.sender?.introduction
-            if let files = messageDTO.files {
-                message.files.append(objectsIn: files)
+            // Room 가져오기 또는 생성
+            let room: ChatRoomObject
+            if let existingRoom = realm.object(ofType: ChatRoomObject.self, forPrimaryKey: roomId) {
+                room = existingRoom
+            } else {
+                room = ChatRoomObject(
+                    roomId: roomId,
+                    createdAt: ISO8601DateFormatter().string(from: Date())
+                )
+                realm.add(room)
             }
-            message.isSentByMe = messageDTO.sender?.userId == myUserId
-            message.isTemporary = false
+
+            // Sender 가져오기 또는 생성
+            var sender: UserObject?
+            if let senderDTO = messageDTO.sender, let senderId = senderDTO.userId {
+                if let existingSender = realm.object(ofType: UserObject.self, forPrimaryKey: senderId) {
+                    sender = existingSender
+                } else {
+                    sender = senderDTO.toRealmObject()
+                    realm.add(sender!)
+                }
+            }
+
+            // 메시지 생성
+            let message = ChatMessageObject(
+                chatId: messageDTO.chatId ?? UUID().uuidString,
+                room: room,
+                content: messageDTO.content,
+                createdAt: messageDTO.createdAt ?? ISO8601DateFormatter().string(from: Date()),
+                updatedAt: messageDTO.updatedAt,
+                sender: sender,
+                files: messageDTO.files ?? [],
+                isSentByMe: messageDTO.sender?.userId == myUserId,
+                isTemporary: false
+            )
 
             realm.add(message, update: .modified)
+
+            // Room의 lastMessage 업데이트
+            room.lastMessage = message
+            room.updatedAt = message.createdAt
         }
         Logger.database.info("💾 Saved message from DTO: \(messageDTO.chatId ?? "unknown")")
     }
 
-    func createAndSaveMessage(
+    func createAndSaveTemporaryMessage(
         chatId: String,
         roomId: String,
         content: String?,
         createdAt: String,
-        updatedAt: String?,
-        senderUserId: String?,
-        senderNickname: String?,
+        senderUserId: String,
+        senderNickname: String,
         senderProfileImage: String?,
-        senderIntroduction: String?,
-        files: [String],
-        isSentByMe: Bool,
-        isTemporary: Bool
+        files: [String]
     ) async throws {
         try await actor.write { realm in
-            let message = ChatMessageObject()
-            message.chatId = chatId
-            message.roomId = roomId
-            message.content = content
-            message.createdAt = createdAt
-            message.updatedAt = updatedAt
-            message.senderUserId = senderUserId
-            message.senderNickname = senderNickname
-            message.senderProfileImage = senderProfileImage
-            message.senderIntroduction = senderIntroduction
-            message.files.append(objectsIn: files)
-            message.isSentByMe = isSentByMe
-            message.isTemporary = isTemporary
+            // Room 가져오기 또는 생성
+            let room: ChatRoomObject
+            if let existingRoom = realm.object(ofType: ChatRoomObject.self, forPrimaryKey: roomId) {
+                room = existingRoom
+            } else {
+                room = ChatRoomObject(
+                    roomId: roomId,
+                    createdAt: ISO8601DateFormatter().string(from: Date())
+                )
+                realm.add(room)
+            }
+
+            // Sender 가져오기 또는 생성
+            let sender: UserObject
+            if let existingSender = realm.object(ofType: UserObject.self, forPrimaryKey: senderUserId) {
+                sender = existingSender
+            } else {
+                sender = UserObject(
+                    userId: senderUserId,
+                    nickname: senderNickname,
+                    profileImage: senderProfileImage
+                )
+                realm.add(sender)
+            }
+
+            // 임시 메시지 생성
+            let message = ChatMessageObject(
+                chatId: chatId,
+                room: room,
+                content: content,
+                createdAt: createdAt,
+                sender: sender,
+                files: files,
+                isSentByMe: true,
+                isTemporary: true
+            )
 
             realm.add(message, update: .modified)
         }
-        Logger.database.info("💾 Created and saved message: \(chatId)")
+        Logger.database.info("💾 Created temporary message: \(chatId)")
     }
 
     func fetchMessages(roomId: String, limit: Int = 50, beforeDate: String? = nil) async throws -> [ChatMessageObject] {
         try await actor.read { realm in
             var query = realm.objects(ChatMessageObject.self)
-                .where { $0.roomId == roomId }
+                .where { $0.room.roomId == roomId }
 
             if let beforeDate = beforeDate {
                 query = query.where { $0.createdAt < beforeDate }
@@ -133,7 +263,7 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
     func fetchMessagesAsUIModels(roomId: String, limit: Int = 50, beforeDate: String? = nil) async throws -> [ChatMessageUIModel] {
         try await actor.read { realm in
             var query = realm.objects(ChatMessageObject.self)
-                .where { $0.roomId == roomId }
+                .where { $0.room.roomId == roomId }
 
             if let beforeDate = beforeDate {
                 query = query.where { $0.createdAt < beforeDate }
@@ -149,9 +279,9 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
                     id: message.chatId,
                     content: message.content,
                     createdAt: message.createdAt,
-                    senderUserId: message.senderUserId,
-                    senderNickname: message.senderNickname ?? "알 수 없음",
-                    senderProfileImage: message.senderProfileImage,
+                    senderUserId: message.sender?.userId,
+                    senderNickname: message.sender?.nickname ?? "알 수 없음",
+                    senderProfileImage: message.sender?.profileImage,
                     files: Array(message.files),
                     isSentByMe: message.isSentByMe,
                     isTemporary: message.isTemporary,
@@ -164,7 +294,7 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
     func fetchChatIds(roomId: String) async throws -> Set<String> {
         try await actor.read { realm in
             let results = realm.objects(ChatMessageObject.self)
-                .where { $0.roomId == roomId }
+                .where { $0.room.roomId == roomId }
             return Set(results.map { $0.chatId })
         }
     }
@@ -190,28 +320,64 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
 
     // MARK: - Batch Operations
 
-    func saveMessagesFromDTOs(_ messages: [ChatMessageItemDTO], myUserId: String) async throws {
+    func saveMessagesFromDTOs(_ messages: [ChatMessageItemDTO], roomId: String, myUserId: String) async throws {
         guard !messages.isEmpty else { return }
 
         try await actor.write { realm in
+            // Room 가져오기 또는 생성
+            let room: ChatRoomObject
+            if let existingRoom = realm.object(ofType: ChatRoomObject.self, forPrimaryKey: roomId) {
+                room = existingRoom
+            } else {
+                room = ChatRoomObject(
+                    roomId: roomId,
+                    createdAt: ISO8601DateFormatter().string(from: Date())
+                )
+                realm.add(room)
+            }
+
+            // 유저 캐시 (같은 트랜잭션 내 중복 조회 방지)
+            var userCache: [String: UserObject] = [:]
+
             for messageDTO in messages {
-                let message = ChatMessageObject()
-                message.chatId = messageDTO.chatId ?? UUID().uuidString
-                message.roomId = messageDTO.roomId ?? ""
-                message.content = messageDTO.content
-                message.createdAt = messageDTO.createdAt ?? ISO8601DateFormatter().string(from: Date())
-                message.updatedAt = messageDTO.updatedAt
-                message.senderUserId = messageDTO.sender?.userId
-                message.senderNickname = messageDTO.sender?.nick
-                message.senderProfileImage = messageDTO.sender?.profileImage
-                message.senderIntroduction = messageDTO.sender?.introduction
-                if let files = messageDTO.files {
-                    message.files.append(objectsIn: files)
+                // Sender 처리
+                var sender: UserObject?
+                if let senderDTO = messageDTO.sender, let senderId = senderDTO.userId {
+                    if let cachedUser = userCache[senderId] {
+                        sender = cachedUser
+                    } else if let existingSender = realm.object(ofType: UserObject.self, forPrimaryKey: senderId) {
+                        sender = existingSender
+                        userCache[senderId] = existingSender
+                    } else {
+                        let newSender = senderDTO.toRealmObject()
+                        realm.add(newSender)
+                        sender = newSender
+                        userCache[senderId] = newSender
+                    }
                 }
-                message.isSentByMe = messageDTO.sender?.userId == myUserId
-                message.isTemporary = false
+
+                // 메시지 생성
+                let message = ChatMessageObject(
+                    chatId: messageDTO.chatId ?? UUID().uuidString,
+                    room: room,
+                    content: messageDTO.content,
+                    createdAt: messageDTO.createdAt ?? ISO8601DateFormatter().string(from: Date()),
+                    updatedAt: messageDTO.updatedAt,
+                    sender: sender,
+                    files: messageDTO.files ?? [],
+                    isSentByMe: messageDTO.sender?.userId == myUserId,
+                    isTemporary: false
+                )
 
                 realm.add(message, update: .modified)
+            }
+
+            // 가장 최신 메시지로 room.lastMessage 업데이트
+            if let latestMessage = messages.max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") }),
+               let latestChatId = latestMessage.chatId,
+               let savedMessage = realm.object(ofType: ChatMessageObject.self, forPrimaryKey: latestChatId) {
+                room.lastMessage = savedMessage
+                room.updatedAt = savedMessage.createdAt
             }
         }
         Logger.database.info("💾 [Batch] Saved \(messages.count) messages in single transaction")
@@ -219,21 +385,34 @@ final class ChatMessageRepository: ChatMessageRepositoryProtocol {
 
     // MARK: - Metadata Operations
 
-    func getMetadata(roomId: String) async throws -> ChatRoomMetadataObject? {
+    func getMetadata(roomId: String) async throws -> (lastCursor: String?, hasMoreData: Bool)? {
         try await actor.read { realm in
-            realm.object(ofType: ChatRoomMetadataObject.self, forPrimaryKey: roomId)?.freeze()
+            guard let room = realm.object(ofType: ChatRoomObject.self, forPrimaryKey: roomId) else {
+                return nil
+            }
+            return (room.lastCursor, room.hasMoreData)
         }
     }
 
     func updateMetadata(roomId: String, lastCursor: String?, hasMoreData: Bool) async throws {
         try await actor.write { realm in
-            let metadata = ChatRoomMetadataObject()
-            metadata.roomId = roomId
-            metadata.lastCursor = lastCursor
-            metadata.hasMoreData = hasMoreData
-            metadata.lastSyncedAt = ISO8601DateFormatter().string(from: Date())
-            realm.add(metadata, update: .modified)
-            Logger.database.info("✏️ Updated metadata for room: \(roomId)")
+            if let room = realm.object(ofType: ChatRoomObject.self, forPrimaryKey: roomId) {
+                room.lastCursor = lastCursor
+                room.hasMoreData = hasMoreData
+                room.lastSyncedAt = ISO8601DateFormatter().string(from: Date())
+                Logger.database.info("✏️ Updated metadata for room: \(roomId)")
+            } else {
+                // Room이 없으면 생성
+                let room = ChatRoomObject(
+                    roomId: roomId,
+                    createdAt: ISO8601DateFormatter().string(from: Date()),
+                    lastCursor: lastCursor,
+                    hasMoreData: hasMoreData,
+                    lastSyncedAt: ISO8601DateFormatter().string(from: Date())
+                )
+                realm.add(room)
+                Logger.database.info("🏠 Created room with metadata: \(roomId)")
+            }
         }
     }
 }

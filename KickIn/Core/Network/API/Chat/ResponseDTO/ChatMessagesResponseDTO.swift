@@ -29,4 +29,22 @@ struct ChatMessageItemDTO: Decodable {
         case sender
         case files
     }
+
+    init(
+        chatId: String?,
+        roomId: String?,
+        content: String?,
+        createdAt: String?,
+        updatedAt: String?,
+        sender: ChatSenderDTO?,
+        files: [String]?
+    ) {
+        self.chatId = chatId
+        self.roomId = roomId
+        self.content = content
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.sender = sender
+        self.files = files
+    }
 }

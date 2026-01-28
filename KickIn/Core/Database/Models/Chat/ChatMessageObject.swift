@@ -10,19 +10,16 @@ import RealmSwift
 
 final class ChatMessageObject: Object, Identifiable {
     @Persisted(primaryKey: true) var chatId: String
-    @Persisted(indexed: true) var roomId: String
     @Persisted var content: String?
     @Persisted var createdAt: String
     @Persisted var updatedAt: String?
 
-    // Sender info
-    @Persisted var senderUserId: String?
-    @Persisted var senderNickname: String?
-    @Persisted var senderProfileImage: String?
-    @Persisted var senderIntroduction: String?
-
     // Files
     @Persisted var files: List<String>
+
+    // 관계 참조
+    @Persisted var room: ChatRoomObject?
+    @Persisted var sender: UserObject?
 
     // Local metadata
     @Persisted var isSentByMe: Bool
@@ -31,28 +28,22 @@ final class ChatMessageObject: Object, Identifiable {
 
     convenience init(
         chatId: String,
-        roomId: String,
+        room: ChatRoomObject? = nil,
         content: String?,
         createdAt: String,
-        updatedAt: String?,
-        senderUserId: String?,
-        senderNickname: String?,
-        senderProfileImage: String?,
-        senderIntroduction: String?,
-        files: [String],
+        updatedAt: String? = nil,
+        sender: UserObject? = nil,
+        files: [String] = [],
         isSentByMe: Bool,
         isTemporary: Bool = false
     ) {
         self.init()
         self.chatId = chatId
-        self.roomId = roomId
+        self.room = room
         self.content = content
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.senderUserId = senderUserId
-        self.senderNickname = senderNickname
-        self.senderProfileImage = senderProfileImage
-        self.senderIntroduction = senderIntroduction
+        self.sender = sender
         self.files.append(objectsIn: files)
         self.isSentByMe = isSentByMe
         self.isTemporary = isTemporary
@@ -62,17 +53,26 @@ final class ChatMessageObject: Object, Identifiable {
 // MARK: - DTO → Realm Object Extension
 
 extension ChatMessageItemDTO {
-    func toRealmObject(myUserId: String) -> ChatMessageObject {
-        ChatMessageObject(
+    func toRealmObject(
+        myUserId: String,
+        room: ChatRoomObject?,
+        existingUsers: [String: UserObject]
+    ) -> ChatMessageObject {
+        let senderObject: UserObject? = {
+            guard let senderDTO = self.sender else { return nil }
+            if let existing = existingUsers[senderDTO.userId ?? ""] {
+                return existing
+            }
+            return senderDTO.toRealmObject()
+        }()
+
+        return ChatMessageObject(
             chatId: self.chatId ?? UUID().uuidString,
-            roomId: self.roomId ?? "",
+            room: room,
             content: self.content,
             createdAt: self.createdAt ?? ISO8601DateFormatter().string(from: Date()),
             updatedAt: self.updatedAt,
-            senderUserId: self.sender?.userId,
-            senderNickname: self.sender?.nick,
-            senderProfileImage: self.sender?.profileImage,
-            senderIntroduction: self.sender?.introduction,
+            sender: senderObject,
             files: self.files ?? [],
             isSentByMe: self.sender?.userId == myUserId,
             isTemporary: false

@@ -25,4 +25,17 @@ struct ChatMessageResponseDTO: Decodable {
         case sender
         case files
     }
+
+    /// ChatMessageItemDTO로 변환
+    func toMessageItemDTO() -> ChatMessageItemDTO {
+        ChatMessageItemDTO(
+            chatId: chatId,
+            roomId: roomId,
+            content: content,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            sender: sender,
+            files: files
+        )
+    }
 }

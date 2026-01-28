@@ -160,6 +160,21 @@ actor MessageSyncCoordinator {
             ChatRouter.createOrGetChatRoom(requestDTO)
         )
 
+        // 참가자 정보로 UserObject 업데이트 (프로필 변경 반영)
+        if let participants = chatRoomResponse.participants {
+            for participant in participants {
+                if let userId = participant.userId {
+                    _ = try await repository.getOrCreateUser(
+                        userId: userId,
+                        nickname: participant.nick ?? "알 수 없는 사용자",
+                        profileImage: participant.profileImage,
+                        introduction: participant.introduction
+                    )
+                }
+            }
+            Logger.chat.info("👤 [MessageSyncCoordinator] Updated \(participants.count) participants' profiles")
+        }
+
         let serverLastChatId = chatRoomResponse.lastChat?.chatId
         Logger.chat.info("📊 [MessageSyncCoordinator] Gap check - Local: \(localLastMessage?.id ?? "nil"), Server: \(serverLastChatId ?? "nil")")
 
@@ -226,7 +241,7 @@ actor MessageSyncCoordinator {
                 totalEstimate: allFetchedMessages.count
             )))
 
-            try await repository.saveMessagesFromDTOs(allFetchedMessages, myUserId: myUserId)
+            try await repository.saveMessagesFromDTOs(allFetchedMessages, roomId: roomId, myUserId: myUserId)
             await onMessagesUpdated?()
 
             Logger.chat.info("💾 [MessageSyncCoordinator] Saved \(allFetchedMessages.count) missing messages")
@@ -279,7 +294,7 @@ actor MessageSyncCoordinator {
                 totalEstimate: allFetchedMessages.count
             )))
 
-            try await repository.saveMessagesFromDTOs(allFetchedMessages, myUserId: myUserId)
+            try await repository.saveMessagesFromDTOs(allFetchedMessages, roomId: roomId, myUserId: myUserId)
             await onMessagesUpdated?()
 
             Logger.chat.info("💾 [MessageSyncCoordinator] Full sync saved \(allFetchedMessages.count) messages")
@@ -308,7 +323,7 @@ actor MessageSyncCoordinator {
         }
 
         if !uniqueMessages.isEmpty {
-            try? await repository.saveMessagesFromDTOs(uniqueMessages, myUserId: myUserId)
+            try? await repository.saveMessagesFromDTOs(uniqueMessages, roomId: roomId, myUserId: myUserId)
             await onMessagesUpdated?()
 
             Logger.chat.info("📦 [MessageSyncCoordinator] Processed \(uniqueMessages.count) buffered messages")
