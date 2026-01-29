@@ -10,17 +10,13 @@ import SwiftUI
 struct MainTabView: View {
     @State private var selectedTab: TabItem = .home
     @ObservedObject private var deepLinkManager = DeepLinkManager.shared
-
+    
     enum TabItem {
         case home
         case interest
         case map
         case chat
         case profile
-    }
-    
-    init() {
-        UITabBar.appearance().unselectedItemTintColor = UIColor(Color.gray45)
     }
     
     var body: some View {
@@ -37,12 +33,7 @@ struct MainTabView: View {
                     HomeView()
                 }
                 .tabItem {
-                    Label {
-                        Text("홈")
-                    } icon: {
-                        Image(selectedTab == .home ? "TabBar/Home_Fill" : "TabBar/Home_Empty")
-                            .renderingMode(.template)
-                    }
+                    Label("홈", systemImage: "house")
                 }
                 .tag(TabItem.home)
                 
@@ -50,12 +41,7 @@ struct MainTabView: View {
                     InterestView()
                 }
                 .tabItem {
-                    Label {
-                        Text("관심매물")
-                    } icon: {
-                        Image(selectedTab == .interest ? "TabBar/Interest_Fill" : "TabBar/Interest_Empty")
-                            .renderingMode(.template)
-                    }
+                    Label("관심매물", systemImage: "heart")
                 }
                 .tag(TabItem.interest)
                 
@@ -63,11 +49,7 @@ struct MainTabView: View {
                     MapView()
                 }
                 .tabItem {
-                    Label {
-                        Text("매물지도")
-                    } icon: {
-                        Image(systemName: "map")
-                    }
+                    Label("매물지도", systemImage: "map")
                 }
                 .tag(TabItem.map)
                 
@@ -75,11 +57,7 @@ struct MainTabView: View {
                     ChatRoomListView(pendingChatRoomId: $deepLinkManager.pendingChatRoomId)
                 }
                 .tabItem {
-                    Label {
-                        Text("채팅")
-                    } icon: {
-                        Image(systemName: selectedTab == .chat ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
-                    }
+                    Label("채팅", systemImage: "bubble.left.and.bubble.right")
                 }
                 .tag(TabItem.chat)
                 
@@ -87,12 +65,7 @@ struct MainTabView: View {
                     ProfileView()
                 }
                 .tabItem {
-                    Label {
-                        Text("프로필")
-                    } icon: {
-                        Image(selectedTab == .profile ? "TabBar/Setting_Fill" : "TabBar/Setting_Empty")
-                            .renderingMode(.template)
-                    }
+                    Label("프로필", systemImage: "person")
                 }
                 .tag(TabItem.profile)
             }

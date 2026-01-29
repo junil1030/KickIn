@@ -51,10 +51,3 @@ struct HomeView: View {
         }
     }
 }
-
-#Preview {
-    NavigationStack {
-        HomeView()
-            .environment(\.screenSize, ScreenSize(width: 390, height: 844, safeAreaTop: 47, safeAreaBottom: 34))
-    }
-}
