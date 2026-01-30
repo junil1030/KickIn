@@ -170,4 +170,22 @@ extension String {
             return DetectedLink(url: url.absoluteString, range: match.range)
         }
     }
+
+    /// ISO8601 날짜 문자열을 미디어 서랍 날짜 헤더로 변환 (e.g., "2026년 1월")
+    /// KST 기준으로 변환
+    /// - Returns: 날짜 헤더 문자열 (YYYY년 M월 형식), 변환 실패 시 nil
+    func toDateHeaderText() -> String? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        guard let date = formatter.date(from: self) else {
+            return nil
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy년 M월"
+        dateFormatter.locale = Locale(identifier: "ko_KR")
+        dateFormatter.timeZone = TimeZone(identifier: "Asia/Seoul") // KST
+        return dateFormatter.string(from: date)
+    }
 }
