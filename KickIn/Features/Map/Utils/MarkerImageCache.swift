@@ -47,9 +47,9 @@ final class MarkerImageCache {
         }
 
         // Create new image from SwiftUI View
-        // Note: ClusterMarkerView is 40x40 but we need extra space for any effects
+        // Note: ClusterMarkerView max size is 56pt but we need extra space to prevent clipping
         let view = ClusterMarkerView(count: count)
-        let size = CGSize(width: 60, height: 60)
+        let size = CGSize(width: 80, height: 80)
 
         guard let image = view.asUIImage(size: size) else {
             Logger().error("Failed to render cluster marker for count: \(count)")
@@ -168,11 +168,11 @@ final class MarkerImageCache {
 
     private func createFallbackClusterImage() -> UIImage {
         // Simple gray circle as fallback (with padding space)
-        let size: CGFloat = 50
+        let size: CGFloat = 80
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         return renderer.image { context in
             UIColor.gray.setFill()
-            context.cgContext.fillEllipse(in: CGRect(x: 5, y: 5, width: 40, height: 40))
+            context.cgContext.fillEllipse(in: CGRect(x: 12, y: 12, width: 56, height: 56))
         }
     }
 

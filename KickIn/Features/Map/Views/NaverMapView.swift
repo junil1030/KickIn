@@ -128,8 +128,8 @@ struct NaverMapView: UIViewRepresentable {
                 let clusterImage = MarkerImageCache.shared.clusterImage(count: cluster.pointCount)
                 marker.iconImage = NMFOverlayImage(image: clusterImage)
 
-                // Set anchor to center to prevent clipping
-                marker.anchor = CGPoint(x: 0.5, y: 0.5)
+                // Set anchor slightly lower to prevent top clipping
+                marker.anchor = CGPoint(x: 0.5, y: 0.65)
 
                 // Add touch handler for cluster marker
                 marker.touchHandler = { [weak self] _ in
