@@ -6,6 +6,19 @@
 
 KickIn은 SwiftUI 기반의 iOS 애플리케이션으로, 사용자가 부동산 매물을 탐색하고, 관심 매물을 관리하며, 판매자와 실시간 채팅을 할 수 있는 플랫폼입니다.
 
+## 스크린샷
+
+| | | | |
+|:-:|:-:|:-:|:-:|
+| 로그인 | 홈 | 관심 매물 | 매물 상세 |
+| <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 44 38" src="https://github.com/user-attachments/assets/86482de5-3614-413b-9fe3-4cb3e2eb8f53" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 47 06" src="https://github.com/user-attachments/assets/46d2c584-f0b6-4e62-992b-c6c9397ff5d8" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 47 17" src="https://github.com/user-attachments/assets/047042b4-b142-4698-a818-16bc5280085a" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 49 46" src="https://github.com/user-attachments/assets/cc709e38-4ea0-405b-bdee-281a55627fa0" />
+| 지도 - 단일 마커 | 지도 - 그리드 클러스터링 | 지도 - DBSCAN 클러스터링 | 지도 - 필터 |
+| <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 58" src="https://github.com/user-attachments/assets/26cb121b-b441-446f-b137-ae5fa78e1e04" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 48 01" src="https://github.com/user-attachments/assets/e43c672f-3d0c-47d4-b803-9ee649661833" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 58 59" src="https://github.com/user-attachments/assets/cfd6f0b0-5bc9-4a20-ab26-b406d6b023db" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 09 00 34" src="https://github.com/user-attachments/assets/5d102c1b-947c-46cf-b328-01bc0624a1e0" />
+| 채팅 목록 | 1:1 채팅 - 링크 프리뷰 | 1:1 채팅 - 사진 | 채팅 - 톡서랍 |
+| <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 48 35" src="https://github.com/user-attachments/assets/8758a694-7720-4d54-87c1-e7dd93f57498" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 48 42" src="https://github.com/user-attachments/assets/8f5d5aca-7b9f-4cf6-8d5e-2cf77cfa26e8" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 19 52 22" src="https://github.com/user-attachments/assets/1174e553-1b0b-49b2-b751-b3e599cf30cb" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 30" src="https://github.com/user-attachments/assets/71ed0267-9953-408b-837f-b6a8844b1fff" />
+| 게시판 목록 | 게시판 상세 | 상대방 프로필 | 내 프로필 |
+| <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 04" src="https://github.com/user-attachments/assets/6b0cddbd-123b-472d-8200-0ddf61bade36" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 19" src="https://github.com/user-attachments/assets/727ad262-efe3-4f34-bbaa-6aff6cbf2b79" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 09 08 39" src="https://github.com/user-attachments/assets/cd8102b1-37a8-4ced-beea-fcaabef7d01a" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 35" src="https://github.com/user-attachments/assets/ca790b83-f404-4b19-9a6a-815ee9e12408" />
+
 ## 주요 기능
 
 - **매물 탐색**: 지도 기반 부동산 매물 검색 및 탐색
