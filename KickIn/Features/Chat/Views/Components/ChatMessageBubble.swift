@@ -48,6 +48,17 @@ struct ChatMessageBubble: View {
         return metadata
     }
 
+    private var hasTextAbove: Bool {
+        guard let content = message.content, !content.isEmpty else { return false }
+        if !linkMetadata.isEmpty {
+            let displayText = message.detectedURLs.reduce(content) { text, link in
+                text.replacingOccurrences(of: link.url, with: "")
+            }.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !displayText.isEmpty
+        }
+        return true
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if message.isSentByMe {
@@ -60,7 +71,7 @@ struct ChatMessageBubble: View {
 
                 messageContent
                     .background(Color.deepCream)
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
                 // 프로필 이미지 영역 (조건부 표시)
                 if config.showProfile {
@@ -81,7 +92,7 @@ struct ChatMessageBubble: View {
                     HStack(alignment: .bottom, spacing: 4) {
                         messageContent
                             .background(Color.gray30)
-                            .cornerRadius(12)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         if config.showTime {
                             timeText
@@ -123,27 +134,41 @@ struct ChatMessageBubble: View {
         VStack(alignment: .leading, spacing: 0) {
             if let content = message.content, !content.isEmpty {
                 let detectedLinks = message.detectedURLs
-
-                if !detectedLinks.isEmpty {
-                    // URL이 있는 경우 클릭 가능한 텍스트로 표시
-                    ClickableTextView(
-                        text: content,
-                        detectedLinks: detectedLinks
-                    ) { url in
-                        if let url = URL(string: url) {
-                            UIApplication.shared.open(url)
-                        }
+                let displayText = {
+                    if !linkMetadata.isEmpty {
+                        // 링크 프리뷰가 있으면 URL들을 제거
+                        return detectedLinks.reduce(content) { text, link in
+                            text.replacingOccurrences(of: link.url, with: "")
+                        }.trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else {
+                        return content
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    .padding(.bottom, linkMetadata.isEmpty ? 8 : 6)
-                } else {
-                    // 일반 텍스트
-                    Text(content)
-                        .font(.body2(.pretendardMedium))
-                        .foregroundColor(.gray90)
+                }()
+
+                // 텍스트가 있을 때만 표시
+                if !displayText.isEmpty {
+                    if !detectedLinks.isEmpty && linkMetadata.isEmpty {
+                        // URL이 있지만 프리뷰가 없는 경우 클릭 가능한 텍스트로 표시
+                        ClickableTextView(
+                            text: displayText,
+                            detectedLinks: detectedLinks
+                        ) { url in
+                            if let url = URL(string: url) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.top, 8)
+                        .padding(.bottom, 6)
+                    } else {
+                        // 일반 텍스트 또는 프리뷰가 있는 경우
+                        Text(displayText)
+                            .font(.body2(.pretendardMedium))
+                            .foregroundColor(.gray90)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 8)
+                            .padding(.bottom, linkMetadata.isEmpty ? 8 : 0)
+                    }
                 }
             }
 
@@ -153,7 +178,7 @@ struct ChatMessageBubble: View {
                     LinkPreviewCard(
                         metadata: metadata,
                         isSentByMe: message.isSentByMe,
-                        hasTextAbove: message.content != nil && !message.content!.isEmpty
+                        hasTextAbove: hasTextAbove
                     )
                     .onTapGesture {
                         if let url = URL(string: metadata.url) {

@@ -16,7 +16,7 @@ struct MessageImageGrid: View {
     let isSentByMe: Bool
     let onImageTap: (MediaItem, Int) -> Void
 
-    // 채팅 버블의 최대 너비 (카카오톡 스타일: 화면의 55%)
+    // 채팅 버블의 최대 너비
     private var maxWidth: CGFloat {
         UIScreen.main.bounds.width * 0.55
     }
