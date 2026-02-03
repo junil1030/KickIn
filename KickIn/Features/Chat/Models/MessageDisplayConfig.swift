@@ -8,7 +8,6 @@
 import Foundation
 
 /// 채팅 메시지의 UI 표시 설정을 관리하는 모델
-/// 카카오톡 스타일 연속 메시지 처리: 프로필 숨김, 시간 최적화
 struct MessageDisplayConfig: Identifiable, Hashable {
     let id: String
     let message: ChatMessageUIModel

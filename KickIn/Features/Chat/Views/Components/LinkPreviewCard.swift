@@ -16,6 +16,11 @@ struct LinkPreviewCard: View {
     let isSentByMe: Bool
     let hasTextAbove: Bool
 
+    // 채팅 버블의 최대 너비
+    private var maxWidth: CGFloat {
+        UIScreen.main.bounds.width * 0.70
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // 오픈 그래프 이미지
@@ -23,14 +28,12 @@ struct LinkPreviewCard: View {
                let imageURL = URL(string: imageURLString.hasPrefix("http") ? imageURLString : "https:\(imageURLString)") {
                 CachedAsyncImage(
                     url: imageURL,
-                    targetSize: CGSize(width: 300, height: 180),
+                    targetSize: CGSize(width: maxWidth, height: 180),
                     cachingKit: cachingKit
                 ) { image in
                     image
                         .resizable()
                         .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 180)
                         .clipped()
                 } placeholder: {
                     Rectangle()
@@ -69,7 +72,7 @@ struct LinkPreviewCard: View {
                     Text(title)
                         .font(.body2(.pretendardBold))
                         .foregroundColor(.gray90)
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
 
                 // 설명
@@ -77,11 +80,13 @@ struct LinkPreviewCard: View {
                     Text(description)
                         .font(.caption1(.pretendardRegular))
                         .foregroundColor(.gray75)
-                        .lineLimit(3)
+                        .lineLimit(2)
                 }
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .padding(.top, metadata.imageURL != nil ? 12 : 0)
+            .frame(maxWidth: maxWidth, alignment: .leading)
             .background(isSentByMe ? Color.deepCream : Color.white.opacity(0.95))
         }
         .background(isSentByMe ? Color.deepCream : Color.white.opacity(0.95))
@@ -93,5 +98,6 @@ struct LinkPreviewCard: View {
                 topTrailingRadius: hasTextAbove ? 0 : 12
             )
         )
+        .frame(maxWidth: maxWidth, alignment: .leading)
     }
 }
