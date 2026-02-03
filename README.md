@@ -16,8 +16,24 @@ KickIn은 SwiftUI 기반의 iOS 애플리케이션으로, 사용자가 부동산
 | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 58" src="https://github.com/user-attachments/assets/26cb121b-b441-446f-b137-ae5fa78e1e04" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 48 01" src="https://github.com/user-attachments/assets/e43c672f-3d0c-47d4-b803-9ee649661833" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 58 59" src="https://github.com/user-attachments/assets/cfd6f0b0-5bc9-4a20-ab26-b406d6b023db" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 09 00 34" src="https://github.com/user-attachments/assets/5d102c1b-947c-46cf-b328-01bc0624a1e0" />
 | 채팅 목록 | 1:1 채팅 - 링크 프리뷰 | 1:1 채팅 - 사진 | 채팅 - 톡서랍 |
 | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 48 35" src="https://github.com/user-attachments/assets/8758a694-7720-4d54-87c1-e7dd93f57498" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 48 42" src="https://github.com/user-attachments/assets/8f5d5aca-7b9f-4cf6-8d5e-2cf77cfa26e8" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 19 52 22" src="https://github.com/user-attachments/assets/1174e553-1b0b-49b2-b751-b3e599cf30cb" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 30" src="https://github.com/user-attachments/assets/71ed0267-9953-408b-837f-b6a8844b1fff" />
+| 배너 | 웹뷰 출석체크 | 스트리밍 1 | 스트리밍 2 |
+| <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-01-30 at 09 53 54" src="https://github.com/user-attachments/assets/dc1447e0-d956-42fb-9944-37df92c064f4" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-01-30 at 09 54 03" src="https://github.com/user-attachments/assets/c39c5fe7-fae9-466b-abbe-df244c1332fc" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-01-30 at 09 51 17" src="https://github.com/user-attachments/assets/81196f71-b01a-43d5-a705-f3703ed0f1fa" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-01-30 at 09 51 43" src="https://github.com/user-attachments/assets/abcca522-f941-4929-8859-58f974c9eb9f" />
 | 게시판 목록 | 게시판 상세 | 상대방 프로필 | 내 프로필 |
 | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 04" src="https://github.com/user-attachments/assets/6b0cddbd-123b-472d-8200-0ddf61bade36" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 19" src="https://github.com/user-attachments/assets/727ad262-efe3-4f34-bbaa-6aff6cbf2b79" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 09 08 39" src="https://github.com/user-attachments/assets/cd8102b1-37a8-4ced-beea-fcaabef7d01a" /> | <img width="200" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-02 at 08 50 35" src="https://github.com/user-attachments/assets/ca790b83-f404-4b19-9a6a-815ee9e12408" />
+<table>
+  <tr>
+    <th align="center" colspan="2">아이패드 CTA</th>
+    <th align="center" colspan="2">아이패드 CTA2</th>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="https://github.com/user-attachments/assets/4ac3c622-5cca-4e92-9f1c-b20b25ed1516" width="100%" />
+    </td>
+    <td align="center" colspan="2">
+      <img src="https://github.com/user-attachments/assets/5d84f6a1-b2a8-430c-a448-6235aa46bd49" width="100%" />
+    </td>
+  </tr>
+</table>
 
 ## 주요 기능
 
