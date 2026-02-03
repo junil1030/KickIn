@@ -142,6 +142,7 @@ struct EstateDetailView: View {
                     creator: viewModel.estate?.creator
                 )
             }
+            .frame(maxWidth: isRegularWidth ? 800 : .infinity)
             .frame(maxWidth: .infinity)
         }
     }

@@ -10,6 +10,7 @@ import SwiftUI
 struct EstateDetailOptionView: View {
     let options: EstateOptionsUIModel?
     let parkingCount: Int?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let optionItems: [(name: String, iconName: String)] = [
         ("냉장고", "Option/Refrigerator"),
@@ -21,6 +22,10 @@ struct EstateDetailOptionView: View {
         ("싱크대", "Option/Sink"),
         ("TV", "Option/Television")
     ]
+
+    private var isRegularWidth: Bool {
+        horizontalSizeClass == .regular
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -52,7 +57,8 @@ struct EstateDetailOptionView: View {
 private extension EstateDetailOptionView {
 
     var optionGridView: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
+        let columnCount = isRegularWidth ? 8 : 4
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: columnCount)
 
         return LazyVGrid(columns: columns, spacing: 16) {
             ForEach(optionItems, id: \.name) { item in
