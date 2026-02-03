@@ -129,13 +129,13 @@ private extension EstateDetailAddressPriceView {
             return "가격 미정"
         }
 
-        let depositInManwon = deposit / 10000
+        let depositStr = (deposit / 10000).formattedManwon
 
         if let monthlyRent = monthlyRent, monthlyRent > 0 {
-            let monthlyRentInManwon = monthlyRent / 10000
-            return "\(depositInManwon)/\(monthlyRentInManwon)"
+            let monthlyRentStr = (monthlyRent / 10000).formattedManwon
+            return "\(depositStr)/\(monthlyRentStr)"
         } else {
-            return "\(depositInManwon)"
+            return depositStr
         }
     }
 

@@ -178,13 +178,13 @@ struct SimilarEstateCell: View {
             return "가격 미정"
         }
 
-        let depositInManwon = deposit / 10000
+        let depositStr = (deposit / 10000).formattedManwon
 
         if let monthlyRent = data.monthlyRent, monthlyRent > 0 {
-            let monthlyRentInManwon = monthlyRent / 10000
-            return "월세 \(depositInManwon)/\(monthlyRentInManwon)"
+            let monthlyRentStr = (monthlyRent / 10000).formattedManwon
+            return "월세 \(depositStr)/\(monthlyRentStr)"
         } else {
-            return "전세 \(depositInManwon)"
+            return "전세 \(depositStr)"
         }
     }
 
