@@ -120,12 +120,9 @@ struct UserProfileSheetView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .task {
-            print("📱 [UserProfileSheet] Opening profile for userId: \(userId), userName: \(userName)")
-
             // 본인 프로필 확인
             let myUserId = await tokenStorage.getUserId() ?? ""
             isOwnProfile = (userId == myUserId)
-            print("📱 [UserProfileSheet] isOwnProfile: \(isOwnProfile)")
 
             // 데이터 로드
             await viewModel.loadUserProfile(userId: userId)

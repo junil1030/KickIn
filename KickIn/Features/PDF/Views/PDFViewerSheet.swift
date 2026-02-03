@@ -72,8 +72,6 @@ struct PDFViewerSheet: View {
             }
         }
         .task {
-            print("📄 [PDFViewerSheet] Opening PDF: \(fileName)")
-            print("📄 [PDFViewerSheet] URL: \(pdfURL.absoluteString)")
             await viewModel.loadPDF(from: pdfURL)
         }
     }

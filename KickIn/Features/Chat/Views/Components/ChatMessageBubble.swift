@@ -42,9 +42,6 @@ struct ChatMessageBubble: View {
 
     private var linkMetadata: [LinkMetadata] {
         let metadata = viewModel.getLinkMetadata(for: message.id)
-        if !metadata.isEmpty {
-            print("📎 [ChatMessageBubble] Found \(metadata.count) metadata for message \(message.id)")
-        }
         return metadata
     }
 
@@ -194,17 +191,12 @@ struct ChatMessageBubble: View {
                     isSentByMe: message.isSentByMe,
                     onImageTap: { item, index in
                         if item.type == .pdf {
-                            print("📄 [PDF Tap] item.url: \(item.url)")
                             if let url = item.url.thumbnailURL {
-                                print("📄 [PDF Tap] Generated URL: \(url.absoluteString)")
                                 selectedPDF = PDFInfo(
                                     url: url,
                                     fileName: item.fileName ?? "document.pdf"
                                 )
-                                print("📄 [PDF Tap] selectedPDF set: \(selectedPDF != nil)")
-                            } else {
-                                print("❌ [PDF Tap] Failed to create URL from: \(item.url)")
-                            }
+                            } else { }
                         } else {
                             selectedImageIndex = index
                             showImageViewer = true
