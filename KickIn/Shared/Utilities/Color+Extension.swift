@@ -35,12 +35,12 @@ extension Color {
     }
     
     // MARK: - Brand Color
-    static let deepCream = Color(hex: "#DAC8B1")
-    static let brightCream = Color(hex: "#F1DCC1")
-    static let deepCoast = Color(hex: "#298E9C")
-    static let brightCoast = Color(hex: "#71C9D6")
-    static let deepWood = Color(hex: "#402A32")
-    static let brightWood = Color(hex: "#8C5543")
+    static let deepCream   = Color(hex: "#8FAADC")
+    static let brightCream = Color(hex: "#E6EEF8")
+    static let deepCoast   = Color(hex: "#5E6E75")
+    static let brightCoast = Color(hex: "#DDE3E6")
+    static let deepWood    = Color(hex: "#1C1F24")
+    static let brightWood  = Color(hex: "#6B7280")
     
     // MARK: - Gray Scale Color
     static let gray0 = Color(hex: "#FFFFFF")
