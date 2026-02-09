@@ -45,41 +45,83 @@ struct MessageImageGrid: View {
         imageView(at: 0)
             .aspectRatio(contentMode: .fit)
             .frame(maxWidth: maxWidth)
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - 2장: 1:1 정사각형 2개, 가로 나란히
     private var twoImagesLayout: some View {
         HStack(spacing: 4) {
-            ForEach(0..<2, id: \.self) { index in
-                imageView(at: index)
-                    .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
-                    .clipped()
-                    .cornerRadius(8)
-            }
+            // 왼쪽 이미지: 왼쪽 모서리만
+            imageView(at: 0)
+                .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
+                .clipped()
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 12,
+                        bottomLeadingRadius: 12,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 0
+                    )
+                )
+
+            // 오른쪽 이미지: 오른쪽 모서리만
+            imageView(at: 1)
+                .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
+                .clipped()
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 12,
+                        topTrailingRadius: 12
+                    )
+                )
         }
     }
 
     // MARK: - 3장: 왼쪽 큰 이미지 + 오른쪽 2개 스택
     private var threeImagesLayout: some View {
         HStack(spacing: 4) {
-            // 왼쪽: 큰 이미지 (전체 높이)
+            // 왼쪽: 큰 이미지 (왼쪽 모서리만)
             imageView(at: 0)
                 .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
                 .clipped()
-                .cornerRadius(8)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 12,
+                        bottomLeadingRadius: 12,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 0
+                    )
+                )
 
             // 오른쪽: 2개 스택
             VStack(spacing: 4) {
+                // 오른쪽 위: 오른쪽 위 모서리만
                 imageView(at: 1)
                     .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 8) / 4)
                     .clipped()
-                    .cornerRadius(8)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 12
+                        )
+                    )
 
+                // 오른쪽 아래: 오른쪽 아래 모서리만
                 imageView(at: 2)
                     .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 8) / 4)
                     .clipped()
-                    .cornerRadius(8)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 12,
+                            topTrailingRadius: 0
+                        )
+                    )
             }
         }
     }
@@ -87,16 +129,60 @@ struct MessageImageGrid: View {
     // MARK: - 4장: 2x2 그리드
     private var fourImagesLayout: some View {
         VStack(spacing: 4) {
-            ForEach(0..<2, id: \.self) { row in
-                HStack(spacing: 4) {
-                    ForEach(0..<2, id: \.self) { col in
-                        let index = row * 2 + col
-                        imageView(at: index)
-                            .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
-                            .clipped()
-                            .cornerRadius(8)
-                    }
-                }
+            HStack(spacing: 4) {
+                // 왼쪽 위: topLeading만
+                imageView(at: 0)
+                    .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
+                    .clipped()
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 12,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
+                    )
+
+                // 오른쪽 위: topTrailing만
+                imageView(at: 1)
+                    .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
+                    .clipped()
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 12
+                        )
+                    )
+            }
+
+            HStack(spacing: 4) {
+                // 왼쪽 아래: bottomLeading만
+                imageView(at: 2)
+                    .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
+                    .clipped()
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 12,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
+                    )
+
+                // 오른쪽 아래: bottomTrailing만
+                imageView(at: 3)
+                    .frame(width: (maxWidth - 4) / 2, height: (maxWidth - 4) / 2)
+                    .clipped()
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 12,
+                            topTrailingRadius: 0
+                        )
+                    )
             }
         }
     }
@@ -108,22 +194,65 @@ struct MessageImageGrid: View {
         return VStack(spacing: 4) {
             // 상단: 3개
             HStack(spacing: 4) {
-                ForEach(0..<3, id: \.self) { index in
-                    imageView(at: index)
-                        .frame(width: (maxWidth - 8) / 3, height: imageHeight)
-                        .clipped()
-                        .cornerRadius(8)
-                }
+                // 상단 왼쪽: topLeading만
+                imageView(at: 0)
+                    .frame(width: (maxWidth - 8) / 3, height: imageHeight)
+                    .clipped()
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 12,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
+                    )
+
+                // 상단 중앙: 모서리 없음
+                imageView(at: 1)
+                    .frame(width: (maxWidth - 8) / 3, height: imageHeight)
+                    .clipped()
+
+                // 상단 오른쪽: topTrailing만
+                imageView(at: 2)
+                    .frame(width: (maxWidth - 8) / 3, height: imageHeight)
+                    .clipped()
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 12
+                        )
+                    )
             }
 
             // 하단: 2개
             HStack(spacing: 4) {
-                ForEach(3..<5, id: \.self) { index in
-                    imageView(at: index)
-                        .frame(width: (maxWidth - 4) / 2, height: imageHeight)
-                        .clipped()
-                        .cornerRadius(8)
-                }
+                // 하단 왼쪽: bottomLeading만
+                imageView(at: 3)
+                    .frame(width: (maxWidth - 4) / 2, height: imageHeight)
+                    .clipped()
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 12,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
+                    )
+
+                // 하단 오른쪽: bottomTrailing만
+                imageView(at: 4)
+                    .frame(width: (maxWidth - 4) / 2, height: imageHeight)
+                    .clipped()
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 12,
+                            topTrailingRadius: 0
+                        )
+                    )
             }
         }
     }

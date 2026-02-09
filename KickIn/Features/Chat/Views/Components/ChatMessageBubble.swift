@@ -56,51 +56,111 @@ struct ChatMessageBubble: View {
         return true
     }
 
+    private var hasTextContent: Bool {
+        // 텍스트, 링크 프리뷰, 업로드 상태, 실패 메시지가 있는 경우
+        let hasText = message.content != nil && !message.content!.isEmpty
+        let hasMetadata = !linkMetadata.isEmpty
+        let hasUploadState = message.uploadState != nil || message.isTemporary || message.sendFailed
+        return hasText || hasMetadata || hasUploadState
+    }
+
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if message.isSentByMe {
-                Spacer()
+        VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: 4) {
+            // 이미지는 버블 없이 먼저 표시 (카카오톡 스타일)
+            if !mediaItems.isEmpty {
+                HStack(alignment: .bottom, spacing: 8) {
+                    if message.isSentByMe {
+                        Spacer()
 
-                // 내 메시지: 시간이 버블 왼쪽
-                if config.showTime {
-                    timeText
-                }
+                        if config.showTime && !hasTextContent {
+                            timeText
+                        }
 
-                messageContent
-                    .background(Color.deepCream)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else {
-                // 프로필 이미지 영역 (조건부 표시)
-                if config.showProfile {
-                    profileImage
-                } else {
-                    Color.clear
-                        .frame(width: 36, height: 36)
-                }
+                        mediaContent
+                    } else {
+                        // 프로필 영역 공간 확보
+                        if config.showProfile {
+                            profileImage
+                        } else {
+                            Color.clear
+                                .frame(width: 36, height: 36)
+                        }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    if config.showNickname {
-                        Text(message.senderNickname)
-                            .font(.caption1(.pretendardMedium))
-                            .foregroundColor(.gray75)
+                        VStack(alignment: .leading, spacing: 4) {
+                            if config.showNickname {
+                                Text(message.senderNickname)
+                                    .font(.caption1(.pretendardMedium))
+                                    .foregroundColor(.gray75)
+                            }
+
+                            HStack(alignment: .bottom, spacing: 4) {
+                                mediaContent
+
+                                if config.showTime && !hasTextContent {
+                                    timeText
+                                }
+                            }
+                        }
+
+                        Spacer()
                     }
+                }
+                .padding(.horizontal, 16)
+            }
 
-                    // 상대방 메시지: 버블과 시간을 HStack으로 묶어서 버블 바로 옆에 시간 표시
-                    HStack(alignment: .bottom, spacing: 4) {
-                        messageContent
-                            .background(Color.gray30)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+            // 텍스트 버블은 나중에 표시
+            if hasTextContent {
+                HStack(alignment: .bottom, spacing: 8) {
+                    if message.isSentByMe {
+                        Spacer()
 
                         if config.showTime {
                             timeText
                         }
+
+                        textContent
+                            .background(Color.deepCream)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        // 프로필 이미지 영역 (조건부 표시)
+                        if !mediaItems.isEmpty {
+                            // 이미지가 있으면 프로필 공간만 확보
+                            Color.clear
+                                .frame(width: 36, height: 0)
+                        } else {
+                            // 이미지가 없으면 프로필 표시
+                            if config.showProfile {
+                                profileImage
+                            } else {
+                                Color.clear
+                                    .frame(width: 36, height: 36)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            if config.showNickname && mediaItems.isEmpty {
+                                Text(message.senderNickname)
+                                    .font(.caption1(.pretendardMedium))
+                                    .foregroundColor(.gray75)
+                            }
+
+                            HStack(alignment: .bottom, spacing: 4) {
+                                textContent
+                                    .background(Color.gray30)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                if config.showTime {
+                                    timeText
+                                }
+                            }
+                        }
+
+                        Spacer()
                     }
                 }
-
-                Spacer()
+                .padding(.horizontal, 16)
             }
         }
-        .padding(.horizontal, 16)
         .padding(.vertical, config.showProfile ? 4 : 1)  // 연속 메시지는 패딩 축소
         .sheet(isPresented: $showImageViewer) {
             FullScreenImageViewer(
@@ -127,7 +187,8 @@ struct ChatMessageBubble: View {
         }
     }
 
-    private var messageContent: some View {
+    // 텍스트, 링크 프리뷰, 상태 메시지만 포함 (버블용)
+    private var textContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let content = message.content, !content.isEmpty {
                 let detectedLinks = message.detectedURLs
@@ -183,28 +244,6 @@ struct ChatMessageBubble: View {
                         }
                     }
                 }
-            }
-
-            if !mediaItems.isEmpty {
-                MessageImageGrid(
-                    mediaItems: mediaItems,
-                    isSentByMe: message.isSentByMe,
-                    onImageTap: { item, index in
-                        if item.type == .pdf {
-                            if let url = item.url.thumbnailURL {
-                                selectedPDF = PDFInfo(
-                                    url: url,
-                                    fileName: item.fileName ?? "document.pdf"
-                                )
-                            } else { }
-                        } else {
-                            selectedImageIndex = index
-                            showImageViewer = true
-                        }
-                    }
-                )
-                .padding(linkMetadata.isEmpty ? 8 : 0)
-                .padding(.top, linkMetadata.isEmpty ? 0 : 8)
             }
 
             // 비디오 업로드 상태 표시
@@ -274,6 +313,27 @@ struct ChatMessageBubble: View {
                 .padding(.bottom, 8)
             }
         }
+    }
+
+    // 이미지/비디오/PDF 그리드 (버블 없음)
+    private var mediaContent: some View {
+        MessageImageGrid(
+            mediaItems: mediaItems,
+            isSentByMe: message.isSentByMe,
+            onImageTap: { item, index in
+                if item.type == .pdf {
+                    if let url = item.url.thumbnailURL {
+                        selectedPDF = PDFInfo(
+                            url: url,
+                            fileName: item.fileName ?? "document.pdf"
+                        )
+                    }
+                } else {
+                    selectedImageIndex = index
+                    showImageViewer = true
+                }
+            }
+        )
     }
 
     private var profileImage: some View {
